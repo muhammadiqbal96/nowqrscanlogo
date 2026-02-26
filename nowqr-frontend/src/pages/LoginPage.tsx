@@ -1,9 +1,50 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Eye, EyeOff, ArrowRight, Chrome } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Eye, EyeOff, ArrowRight, Chrome, Loader2 } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
+import toast from 'react-hot-toast'
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const { login, loginWithGoogle } = useAuth()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+
+  // Show Google OAuth error if redirected back
+  const googleError = searchParams.get('error')
+  if (googleError) {
+    toast.error('Google login failed. Please try again.')
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email || !password) {
+      toast.error('Please fill in all fields')
+      return
+    }
+    setLoading(true)
+    try {
+      await login(email, password)
+      toast.success('Welcome back!')
+      navigate('/dashboard')
+    } catch (err: any) {
+      const message = err.response?.data?.message || 'Invalid credentials'
+      toast.error(message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    try {
+      await loginWithGoogle()
+    } catch {
+      toast.error('Failed to start Google login')
+    }
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -22,7 +63,10 @@ export default function LoginPage() {
           </div>
 
           {/* Social login */}
-          <button className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-border rounded-xl hover:bg-muted transition-colors mb-4 text-sm font-medium">
+          <button
+            onClick={handleGoogleLogin}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-border rounded-xl hover:bg-muted transition-colors mb-4 text-sm font-medium"
+          >
             <Chrome className="w-4 h-4" />
             Continue with Google
           </button>
@@ -37,12 +81,14 @@ export default function LoginPage() {
           </div>
 
           {/* Form */}
-          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm font-medium mb-1.5">Email</label>
               <input
                 type="email"
                 placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
               />
             </div>
@@ -55,6 +101,8 @@ export default function LoginPage() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-4 py-3 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all pr-10"
                 />
                 <button
@@ -74,10 +122,10 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 text-sm"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 text-sm disabled:opacity-50"
             >
-              Sign In
-              <ArrowRight className="w-4 h-4" />
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Sign In <ArrowRight className="w-4 h-4" /></>}
             </button>
           </form>
 

@@ -1,9 +1,43 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Mail, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Mail, CheckCircle, Loader2 } from 'lucide-react'
+import { authApi } from '@/lib/api'
+import toast from 'react-hot-toast'
 
 export default function ForgotPasswordPage() {
   const [submitted, setSubmitted] = useState(false)
+  const [email, setEmail] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email) {
+      toast.error('Please enter your email')
+      return
+    }
+    setLoading(true)
+    try {
+      await authApi.forgotPassword(email)
+      setSubmitted(true)
+      toast.success('Reset link sent!')
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to send reset link')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResend = async () => {
+    setLoading(true)
+    try {
+      await authApi.forgotPassword(email)
+      toast.success('Reset link resent!')
+    } catch {
+      toast.error('Failed to resend')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -52,10 +86,7 @@ export default function ForgotPasswordPage() {
           {!submitted ? (
             <form
               className="space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault()
-                setSubmitted(true)
-              }}
+              onSubmit={handleSubmit}
             >
               <div>
                 <label className="block text-sm font-medium mb-1.5">Email address</label>
@@ -65,6 +96,8 @@ export default function ForgotPasswordPage() {
                     type="email"
                     required
                     placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
                   />
                 </div>
@@ -72,18 +105,20 @@ export default function ForgotPasswordPage() {
 
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 text-sm"
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 text-sm disabled:opacity-50"
               >
-                Send Reset Link
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Reset Link'}
               </button>
             </form>
           ) : (
             <div className="space-y-4">
               <button
-                onClick={() => setSubmitted(false)}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 text-sm"
+                onClick={handleResend}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 text-sm disabled:opacity-50"
               >
-                Resend Email
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Resend Email'}
               </button>
             </div>
           )}

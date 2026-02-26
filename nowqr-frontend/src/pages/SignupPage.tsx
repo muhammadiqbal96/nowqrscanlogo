@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Eye, EyeOff, ArrowRight, Chrome, CheckCircle2 } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Eye, EyeOff, ArrowRight, Chrome, CheckCircle2, Loader2 } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
+import toast from 'react-hot-toast'
 
 const benefits = [
   'Create your first AI ad page free',
@@ -11,6 +13,55 @@ const benefits = [
 
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [businessName, setBusinessName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const { register, loginWithGoogle } = useAuth()
+  const navigate = useNavigate()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!firstName || !lastName || !email || !password) {
+      toast.error('Please fill in all required fields')
+      return
+    }
+    if (password.length < 8) {
+      toast.error('Password must be at least 8 characters')
+      return
+    }
+    if (!termsAccepted) {
+      toast.error('Please accept the terms of service')
+      return
+    }
+    setLoading(true)
+    try {
+      await register({ first_name: firstName, last_name: lastName, business_name: businessName || undefined, email, password })
+      toast.success('Account created! Welcome to NowQR!')
+      navigate('/dashboard')
+    } catch (err: any) {
+      const errors = err.response?.data?.errors
+      if (errors) {
+        const firstError = Object.values(errors).flat()[0] as string
+        toast.error(firstError)
+      } else {
+        toast.error(err.response?.data?.message || 'Registration failed')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGoogleSignup = async () => {
+    try {
+      await loginWithGoogle()
+    } catch {
+      toast.error('Failed to start Google signup')
+    }
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -54,7 +105,10 @@ export default function SignupPage() {
           </div>
 
           {/* Social login */}
-          <button className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-border rounded-xl hover:bg-muted transition-colors mb-4 text-sm font-medium">
+          <button
+            onClick={handleGoogleSignup}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-border rounded-xl hover:bg-muted transition-colors mb-4 text-sm font-medium"
+          >
             <Chrome className="w-4 h-4" />
             Continue with Google
           </button>
@@ -69,13 +123,15 @@ export default function SignupPage() {
           </div>
 
           {/* Form */}
-          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1.5">First name</label>
                 <input
                   type="text"
                   placeholder="John"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
                   className="w-full px-4 py-3 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
                 />
               </div>
@@ -84,6 +140,8 @@ export default function SignupPage() {
                 <input
                   type="text"
                   placeholder="Doe"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
                   className="w-full px-4 py-3 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
                 />
               </div>
@@ -93,6 +151,8 @@ export default function SignupPage() {
               <input
                 type="text"
                 placeholder="Your Business Inc."
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
                 className="w-full px-4 py-3 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
               />
             </div>
@@ -101,6 +161,8 @@ export default function SignupPage() {
               <input
                 type="email"
                 placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
               />
             </div>
@@ -110,6 +172,8 @@ export default function SignupPage() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Create a strong password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-4 py-3 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all pr-10"
                 />
                 <button
@@ -123,7 +187,7 @@ export default function SignupPage() {
             </div>
 
             <div className="flex items-start gap-2">
-              <input type="checkbox" id="terms" className="rounded border-border mt-1" />
+              <input type="checkbox" id="terms" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} className="rounded border-border mt-1" />
               <label htmlFor="terms" className="text-xs text-muted-foreground">
                 I agree to the{' '}
                 <a href="#" className="text-primary hover:underline">Terms of Service</a>
@@ -134,10 +198,10 @@ export default function SignupPage() {
 
             <button
               type="submit"
-              className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 text-sm"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 text-sm disabled:opacity-50"
             >
-              Create Account
-              <ArrowRight className="w-4 h-4" />
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Create Account <ArrowRight className="w-4 h-4" /></>}
             </button>
           </form>
 

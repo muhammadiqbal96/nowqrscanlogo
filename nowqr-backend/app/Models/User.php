@@ -1,0 +1,103 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+
+class User extends Authenticatable
+{
+    use HasFactory, Notifiable, HasApiTokens;
+
+    protected $fillable = [
+        'first_name',
+        'last_name',
+        'business_name',
+        'email',
+        'password',
+        'google_id',
+        'avatar',
+        'plan',
+        'credits',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+        'google_id',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'credits' => 'integer',
+        ];
+    }
+
+    // Accessors
+    public function getFullNameAttribute(): string
+    {
+        return "{$this->first_name} {$this->last_name}";
+    }
+
+    // Relationships
+    public function campaigns()
+    {
+        return $this->hasMany(Campaign::class);
+    }
+
+    public function scanLogos()
+    {
+        return $this->hasMany(ScanLogo::class);
+    }
+
+    public function creditTransactions()
+    {
+        return $this->hasMany(CreditTransaction::class);
+    }
+
+    public function scanEvents()
+    {
+        return $this->hasMany(ScanEvent::class);
+    }
+
+    // Credit helpers
+    public function hasCredits(int $amount): bool
+    {
+        return $this->credits >= $amount;
+    }
+
+    public function deductCredits(int $amount, string $description, ?string $refType = null, ?int $refId = null): CreditTransaction
+    {
+        $this->decrement('credits', $amount);
+
+        return $this->creditTransactions()->create([
+            'amount' => -$amount,
+            'balance_after' => $this->fresh()->credits,
+            'type' => 'usage',
+            'description' => $description,
+            'reference_type' => $refType,
+            'reference_id' => $refId,
+        ]);
+    }
+
+    public function addCredits(int $amount, string $type, string $description, ?array $paymentInfo = null): CreditTransaction
+    {
+        $this->increment('credits', $amount);
+
+        return $this->creditTransactions()->create([
+            'amount' => $amount,
+            'balance_after' => $this->fresh()->credits,
+            'type' => $type,
+            'description' => $description,
+            'payment_provider' => $paymentInfo['provider'] ?? null,
+            'payment_id' => $paymentInfo['payment_id'] ?? null,
+            'payment_amount' => $paymentInfo['amount'] ?? null,
+            'payment_currency' => $paymentInfo['currency'] ?? 'USD',
+        ]);
+    }
+}
