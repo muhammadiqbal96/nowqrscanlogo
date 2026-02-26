@@ -5,6 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Stripe\Checkout\Session as StripeSession;
+use Stripe\Stripe;
+use Stripe\Webhook;
 
 class CreditController extends Controller
 {
@@ -36,81 +40,245 @@ class CreditController extends Controller
     }
 
     /**
-     * Purchase a plan (simplified — in production, use Stripe/PayPal webhook).
+     * Create a Stripe Checkout session for a plan purchase.
      */
     public function purchasePlan(Request $request): JsonResponse
     {
         $request->validate([
             'plan' => ['required', 'in:creator,agency'],
-            'payment_id' => ['required', 'string'], // from Stripe/PayPal
         ]);
 
         $user = $request->user();
         $plan = $request->input('plan');
-        $paymentId = $request->input('payment_id');
 
         $planDetails = self::getPricing()[$plan] ?? null;
         if (!$planDetails) {
             return response()->json(['message' => 'Invalid plan'], 422);
         }
 
-        // In production, verify payment with Stripe/PayPal here
-        // For now, trust the payment_id
+        Stripe::setApiKey(config('services.stripe.secret'));
 
-        $user->update(['plan' => $plan]);
+        $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
 
-        $user->addCredits(
-            $planDetails['credits'],
-            'purchase',
-            "Purchased {$planDetails['name']} plan",
-            [
-                'provider' => 'stripe', // or paypal
-                'payment_id' => $paymentId,
-                'amount' => $planDetails['price'],
-                'currency' => 'USD',
-            ]
-        );
+        $session = StripeSession::create([
+            'payment_method_types' => ['card'],
+            'line_items' => [[
+                'price_data' => [
+                    'currency' => 'usd',
+                    'product_data' => [
+                        'name' => $planDetails['name'],
+                        'description' => "{$planDetails['credits']} credits for NowQR",
+                    ],
+                    'unit_amount' => $planDetails['price'] * 100, // cents
+                ],
+                'quantity' => 1,
+            ]],
+            'mode' => 'payment',
+            'success_url' => "{$frontendUrl}/dashboard/credits?session_id={CHECKOUT_SESSION_ID}",
+            'cancel_url' => "{$frontendUrl}/dashboard/credits?cancelled=1",
+            'client_reference_id' => (string) $user->id,
+            'metadata' => [
+                'user_id' => $user->id,
+                'plan' => $plan,
+                'credits' => $planDetails['credits'],
+                'type' => 'plan_purchase',
+            ],
+        ]);
 
         return response()->json([
-            'message' => "Successfully upgraded to {$planDetails['name']}",
-            'plan' => $plan,
-            'credits' => $user->fresh()->credits,
+            'checkout_url' => $session->url,
+            'session_id' => $session->id,
         ]);
     }
 
     /**
-     * Buy additional credits (top-up).
+     * Create a Stripe Checkout session for a credit top-up.
      */
     public function topUp(Request $request): JsonResponse
     {
         $request->validate([
             'credits' => ['required', 'integer', 'min:50', 'max:10000'],
-            'payment_id' => ['required', 'string'],
         ]);
 
         $user = $request->user();
-        $credits = $request->input('credits');
-        $paymentId = $request->input('payment_id');
+        $credits = (int) $request->input('credits');
 
         // Price: $10 per 100 credits
-        $price = ($credits / 100) * 10;
+        $priceInCents = (int) (($credits / 100) * 10 * 100);
 
-        $user->addCredits(
-            $credits,
-            'purchase',
-            "Credit top-up: {$credits} credits",
-            [
-                'provider' => 'stripe',
-                'payment_id' => $paymentId,
-                'amount' => $price,
-                'currency' => 'USD',
-            ]
-        );
+        Stripe::setApiKey(config('services.stripe.secret'));
+
+        $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
+
+        $session = StripeSession::create([
+            'payment_method_types' => ['card'],
+            'line_items' => [[
+                'price_data' => [
+                    'currency' => 'usd',
+                    'product_data' => [
+                        'name' => "NowQR Credit Top-Up",
+                        'description' => "{$credits} credits",
+                    ],
+                    'unit_amount' => $priceInCents,
+                ],
+                'quantity' => 1,
+            ]],
+            'mode' => 'payment',
+            'success_url' => "{$frontendUrl}/dashboard/credits?session_id={CHECKOUT_SESSION_ID}",
+            'cancel_url' => "{$frontendUrl}/dashboard/credits?cancelled=1",
+            'client_reference_id' => (string) $user->id,
+            'metadata' => [
+                'user_id' => $user->id,
+                'credits' => $credits,
+                'type' => 'top_up',
+            ],
+        ]);
 
         return response()->json([
-            'message' => "Added {$credits} credits to your account",
-            'credits' => $user->fresh()->credits,
+            'checkout_url' => $session->url,
+            'session_id' => $session->id,
         ]);
+    }
+
+    /**
+     * Verify a completed Stripe Checkout session and fulfill credits.
+     */
+    public function verifySession(Request $request): JsonResponse
+    {
+        $request->validate([
+            'session_id' => ['required', 'string'],
+        ]);
+
+        $user = $request->user();
+
+        Stripe::setApiKey(config('services.stripe.secret'));
+
+        try {
+            $session = StripeSession::retrieve($request->input('session_id'));
+
+            if ($session->payment_status !== 'paid') {
+                return response()->json(['message' => 'Payment not completed'], 400);
+            }
+
+            // Prevent double-fulfillment
+            $existingTx = $user->creditTransactions()
+                ->where('metadata->stripe_session_id', $session->id)
+                ->first();
+
+            if ($existingTx) {
+                return response()->json([
+                    'message' => 'Credits already added for this payment',
+                    'credits' => $user->credits,
+                    'already_fulfilled' => true,
+                ]);
+            }
+
+            $meta = $session->metadata->toArray();
+            $type = $meta['type'] ?? 'plan_purchase';
+            $credits = (int) ($meta['credits'] ?? 0);
+            $plan = $meta['plan'] ?? null;
+
+            if ($type === 'plan_purchase' && $plan) {
+                $user->update(['plan' => $plan]);
+                $planDetails = self::getPricing()[$plan] ?? ['name' => ucfirst($plan)];
+                $user->addCredits(
+                    $credits,
+                    'purchase',
+                    "Purchased {$planDetails['name']} plan",
+                    [
+                        'provider' => 'stripe',
+                        'stripe_session_id' => $session->id,
+                        'amount' => $session->amount_total / 100,
+                        'currency' => 'USD',
+                    ]
+                );
+            } else {
+                $user->addCredits(
+                    $credits,
+                    'purchase',
+                    "Credit top-up: {$credits} credits",
+                    [
+                        'provider' => 'stripe',
+                        'stripe_session_id' => $session->id,
+                        'amount' => $session->amount_total / 100,
+                        'currency' => 'USD',
+                    ]
+                );
+            }
+
+            return response()->json([
+                'message' => "Successfully added {$credits} credits",
+                'credits' => $user->fresh()->credits,
+                'plan' => $user->fresh()->plan,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Stripe session verification failed', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Payment verification failed'], 500);
+        }
+    }
+
+    /**
+     * Handle Stripe webhook events (backup fulfillment).
+     */
+    public function stripeWebhook(Request $request): JsonResponse
+    {
+        $webhookSecret = config('services.stripe.webhook_secret');
+        $payload = $request->getContent();
+        $sigHeader = $request->header('Stripe-Signature');
+
+        try {
+            $event = Webhook::constructEvent($payload, $sigHeader, $webhookSecret);
+        } catch (\Exception $e) {
+            Log::error('Stripe webhook signature failed', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Invalid signature'], 400);
+        }
+
+        if ($event->type === 'checkout.session.completed') {
+            $session = $event->data->object;
+
+            if ($session->payment_status === 'paid') {
+                $userId = $session->metadata->user_id ?? null;
+                $credits = (int) ($session->metadata->credits ?? 0);
+                $type = $session->metadata->type ?? 'plan_purchase';
+                $plan = $session->metadata->plan ?? null;
+
+                if (!$userId || !$credits) {
+                    return response()->json(['status' => 'skipped']);
+                }
+
+                $user = \App\Models\User::find($userId);
+                if (!$user) {
+                    return response()->json(['error' => 'User not found'], 404);
+                }
+
+                // Prevent double-fulfillment
+                $existing = $user->creditTransactions()
+                    ->where('metadata->stripe_session_id', $session->id)
+                    ->first();
+
+                if ($existing) {
+                    return response()->json(['status' => 'already_fulfilled']);
+                }
+
+                if ($type === 'plan_purchase' && $plan) {
+                    $user->update(['plan' => $plan]);
+                }
+
+                $user->addCredits(
+                    $credits,
+                    'purchase',
+                    $type === 'plan_purchase' ? "Plan purchase via Stripe" : "Credit top-up via Stripe",
+                    [
+                        'provider' => 'stripe',
+                        'stripe_session_id' => $session->id,
+                        'amount' => $session->amount_total / 100,
+                        'currency' => 'USD',
+                    ]
+                );
+            }
+        }
+
+        return response()->json(['status' => 'ok']);
     }
 
     /**

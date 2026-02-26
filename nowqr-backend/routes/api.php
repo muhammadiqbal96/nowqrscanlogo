@@ -39,6 +39,9 @@ Route::get('/pricing', function () {
     ]);
 });
 
+// Public campaign page (hosted landing page)
+Route::get('/pages/{slug}', [CampaignController::class, 'publicPage']);
+
 // ─── Protected Routes (require auth token) ──────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -58,7 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/campaigns/{campaign}/upload', [CampaignController::class, 'uploadAsset']);
 
     // ScanLogos
-    Route::apiResource('scanlogos', ScanLogoController::class);
+    Route::apiResource('scanlogos', ScanLogoController::class)->parameters(['scanlogos' => 'scanLogo']);
     Route::post('/scanlogos/{scanLogo}/upload-logo', [ScanLogoController::class, 'uploadLogo']);
 
     // AI Content
@@ -74,4 +77,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/credits/transactions', [CreditController::class, 'transactions']);
     Route::post('/credits/purchase-plan', [CreditController::class, 'purchasePlan']);
     Route::post('/credits/top-up', [CreditController::class, 'topUp']);
+    Route::post('/credits/verify-session', [CreditController::class, 'verifySession']);
 });
+
+// Stripe webhook (no auth)
+Route::post('/stripe/webhook', [CreditController::class, 'stripeWebhook']);

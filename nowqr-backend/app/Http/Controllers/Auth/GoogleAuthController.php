@@ -76,7 +76,6 @@ class GoogleAuthController extends Controller
             // Redirect to frontend with token
             $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
             return redirect("{$frontendUrl}/auth/callback?token={$token}");
-
         } catch (\Exception $e) {
             Log::error('Google OAuth error: ' . $e->getMessage());
             $frontendUrl = config('app.frontend_url', 'http://localhost:5173');

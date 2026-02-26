@@ -1,0 +1,135 @@
+/* ─── ScanLogo Preview Animations ─────────────────────────── */
+
+.scanlogo-preview-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.scanlogo-cta-text {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.scanlogo-short-url {
+    font-size: 10px;
+    color: var(--muted-foreground, #888);
+    margin-top: 2px;
+}
+
+.scanlogo-safe-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: #16a34a;
+    background: rgba(34, 197, 94, 0.1);
+    padding: 5px 12px;
+    border-radius: 999px;
+    margin-top: 10px;
+}
+
+/* ─── Spin ─────────────────────────────────────────────────── */
+.scanlogo-anim-spin {
+    animation: scanlogo-spin 6s linear infinite;
+}
+
+@keyframes scanlogo-spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* ─── Pulse ────────────────────────────────────────────────── */
+.scanlogo-anim-pulse {
+    animation: scanlogo-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes scanlogo-pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.06);
+        opacity: 0.85;
+    }
+}
+
+/* ─── Bounce ───────────────────────────────────────────────── */
+.scanlogo-anim-bounce {
+    animation: scanlogo-bounce 2s ease infinite;
+}
+
+@keyframes scanlogo-bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    30% {
+        transform: translateY(-14px);
+    }
+
+    50% {
+        transform: translateY(0);
+    }
+
+    70% {
+        transform: translateY(-7px);
+    }
+
+    85% {
+        transform: translateY(0);
+    }
+}
+
+/* ─── Expand ───────────────────────────────────────────────── */
+.scanlogo-anim-expand {
+    animation: scanlogo-expand 3s ease-in-out infinite;
+}
+
+@keyframes scanlogo-expand {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.12);
+    }
+}
+
+/* ─── Glow ─────────────────────────────────────────────────── */
+.scanlogo-anim-glow {
+    animation: scanlogo-glow 2.5s ease-in-out infinite;
+}
+
+@keyframes scanlogo-glow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 8px 2px var(--scanlogo-glow-color, rgba(200, 64, 26, 0.4));
+    }
+
+    50% {
+        box-shadow: 0 0 24px 8px var(--scanlogo-glow-color, rgba(200, 64, 26, 0.4)),
+            0 0 48px 16px var(--scanlogo-glow-color, rgba(200, 64, 26, 0.2));
+    }
+}
+
+/* ─── None ─────────────────────────────────────────────────── */
+.scanlogo-anim-none {
+    animation: none;
+}

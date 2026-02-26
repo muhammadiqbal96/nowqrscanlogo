@@ -23,6 +23,8 @@ import ScanLogoDetailPage from '@/pages/dashboard/ScanLogoDetailPage'
 import AnalyticsDashboardPage from '@/pages/dashboard/AnalyticsDashboardPage'
 import SettingsPage from '@/pages/dashboard/SettingsPage'
 import CreditsPage from '@/pages/dashboard/CreditsPage'
+import FlyerEditorPage from '@/pages/dashboard/FlyerEditorPage'
+import CampaignPublicPage from '@/pages/CampaignPublicPage'
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
@@ -45,7 +47,8 @@ function App() {
   const location = useLocation()
   const isDashboard = location.pathname.startsWith('/dashboard')
   const isAuthPage = ['/login', '/signup', '/forgot-password', '/auth/callback', '/reset-password'].includes(location.pathname)
-  const showChrome = !isAuthPage && !isDashboard
+  const isPublicPage = location.pathname.startsWith('/p/')
+  const showChrome = !isAuthPage && !isDashboard && !isPublicPage
 
   return (
     <div className="min-h-screen flex flex-col overflow-x-hidden">
@@ -59,6 +62,9 @@ function App() {
           <Route path="/solutions" element={<SolutionsPage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/resources" element={<ResourcesPage />} />
+
+          {/* Public campaign pages */}
+          <Route path="/p/:slug" element={<CampaignPublicPage />} />
 
           {/* Auth pages */}
           <Route path="/login" element={<LoginPage />} />
@@ -74,6 +80,7 @@ function App() {
               <Route path="campaigns" element={<CampaignsListPage />} />
               <Route path="campaigns/new" element={<CampaignBuilderPage />} />
               <Route path="campaigns/:id" element={<CampaignBuilderPage />} />
+              <Route path="campaigns/:id/flyer" element={<FlyerEditorPage />} />
               <Route path="scanlogos" element={<ScanLogosListPage />} />
               <Route path="scanlogos/new" element={<ScanLogoBuilderPage />} />
               <Route path="scanlogos/:id" element={<ScanLogoDetailPage />} />

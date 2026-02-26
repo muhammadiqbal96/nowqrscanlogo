@@ -47,7 +47,7 @@ class RegisterController extends Controller
                 'email' => $user->email,
                 'plan' => $user->plan,
                 'credits' => $user->credits,
-                'avatar' => $user->avatar,
+                'avatar' => $user->avatar_url,
             ],
             'token' => $token,
         ], 201);

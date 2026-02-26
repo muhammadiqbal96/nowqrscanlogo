@@ -38,6 +38,8 @@ class ScanLogo extends Model
         ];
     }
 
+    protected $appends = ['short_url'];
+
     protected static function booted(): void
     {
         static::creating(function (ScanLogo $scanLogo) {
@@ -47,10 +49,20 @@ class ScanLogo extends Model
                 } while (static::where('short_code', $code)->exists());
                 $scanLogo->short_code = $code;
             }
-            if (empty($scanLogo->short_url)) {
-                $scanLogo->short_url = "https://nqr.ai/{$scanLogo->short_code}";
-            }
+            // Store short_url to satisfy NOT NULL constraint
+            $baseUrl = rtrim(config('app.url', 'https://nqr.ai'), '/');
+            $scanLogo->short_url = "{$baseUrl}/r/{$scanLogo->short_code}";
         });
+    }
+
+    /**
+     * Always compute short_url from current APP_URL so it stays correct
+     * even when the deployment URL changes.
+     */
+    public function getShortUrlAttribute(): string
+    {
+        $baseUrl = rtrim(config('app.url', 'https://nqr.ai'), '/');
+        return "{$baseUrl}/r/{$this->short_code}";
     }
 
     // Relationships

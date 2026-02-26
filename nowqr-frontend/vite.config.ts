@@ -12,8 +12,17 @@ export default defineConfig({
     },
   },
   server: {
+    host: true, // expose on LAN for phone QR testing
     proxy: {
       '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/r': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/storage': {
         target: 'http://localhost:8000',
         changeOrigin: true,
       },

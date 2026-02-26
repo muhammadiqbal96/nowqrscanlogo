@@ -83,7 +83,6 @@ class AiContentController extends Controller
                 'content' => $generated,
                 'credits_remaining' => $user->fresh()->credits,
             ]);
-
         } catch (\Exception $e) {
             Log::error('AI content generation error: ' . $e->getMessage());
             return response()->json([

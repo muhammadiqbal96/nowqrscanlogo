@@ -164,4 +164,48 @@ class CampaignController extends Controller
             abort(403, 'Unauthorized');
         }
     }
+
+    /**
+     * Serve a public campaign landing page (no auth required).
+     */
+    public function publicPage(string $slug): JsonResponse
+    {
+        $campaign = Campaign::where('slug', $slug)
+            ->where('is_published', true)
+            ->where('status', 'active')
+            ->firstOrFail();
+
+        // Load associated ScanLogos for this campaign
+        $campaign->load(['scanLogos' => function ($q) {
+            $q->where('is_active', true);
+        }]);
+
+        return response()->json([
+            'campaign' => [
+                'name' => $campaign->name,
+                'business_name' => $campaign->business_name,
+                'headline' => $campaign->headline,
+                'sub_headline' => $campaign->sub_headline,
+                'description' => $campaign->description,
+                'cta_type' => $campaign->cta_type,
+                'cta_button_text' => $campaign->cta_button_text,
+                'primary_color' => $campaign->primary_color,
+                'font_family' => $campaign->font_family,
+                'logo_path' => $campaign->logo_path,
+                'background_image_path' => $campaign->background_image_path,
+                'page_design' => $campaign->page_design,
+                'scan_logos' => $campaign->scanLogos->map(fn($sl) => [
+                    'short_url' => $sl->short_url,
+                    'short_code' => $sl->short_code,
+                    'shape' => $sl->shape,
+                    'animation' => $sl->animation,
+                    'color' => $sl->color,
+                    'cta_text' => $sl->cta_text,
+                    'safe_scan_badge' => $sl->safe_scan_badge,
+                    'center_logo_path' => $sl->center_logo_path,
+                    'destination_url' => $sl->destination_url,
+                ]),
+            ],
+        ]);
+    }
 }

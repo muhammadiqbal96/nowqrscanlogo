@@ -44,6 +44,15 @@ class User extends Authenticatable
         return "{$this->first_name} {$this->last_name}";
     }
 
+    public function getAvatarUrlAttribute(): ?string
+    {
+        if (!$this->avatar) return null;
+        // If already a full URL (e.g., from Google), return as-is
+        if (str_starts_with($this->avatar, 'http')) return $this->avatar;
+        // Otherwise, build the storage URL
+        return url("storage/{$this->avatar}");
+    }
+
     // Relationships
     public function campaigns()
     {
