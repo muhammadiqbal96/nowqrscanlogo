@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
     ArrowLeft, ExternalLink, Loader2, Copy,
-    Edit3, Save, Download, BarChart3, Upload, X
+    Edit3, Save, Download, BarChart3, Upload
 } from 'lucide-react'
 import { scanLogoApi, analyticsApi } from '@/lib/api'
 import ScanLogoPreview, { type ScanLogoPreviewRef } from '@/components/ScanLogoPreview'
@@ -20,7 +20,6 @@ export default function ScanLogoDetailPage() {
     const [saving, setSaving] = useState(false)
 
     // Logo upload for center
-    const [logoFile, setLogoFile] = useState<File | null>(null)
     const [uploadingLogo, setUploadingLogo] = useState(false)
 
     useEffect(() => {
@@ -80,7 +79,7 @@ export default function ScanLogoDetailPage() {
     }
 
     if (loading) {
-        return <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+        return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
     }
 
     if (!scanLogo) return null

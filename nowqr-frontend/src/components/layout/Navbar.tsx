@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTheme } from '@/context/ThemeContext'
+import { useAuth } from '@/context/AuthContext'
 import {
   Menu,
   X,
@@ -53,6 +54,7 @@ const resourcesItems = [
 
 export default function Navbar() {
   const { theme, toggleTheme } = useTheme()
+  const { user, isAuthenticated } = useAuth()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
@@ -99,16 +101,16 @@ export default function Navbar() {
             <Link to="/" className="flex items-center gap-2.5 group flex-shrink-0">
               <div className="relative w-10 h-10 bg-primary flex items-center justify-center shadow-lg shadow-primary/25 group-hover:shadow-primary/40 transition-shadow group-hover:scale-105 transition-transform" style={{ borderRadius: '12px' }}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="2" y="2" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2" fill="none"/>
-                  <rect x="4.5" y="4.5" width="3" height="3" rx="0.5" fill="white"/>
-                  <rect x="14" y="2" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2" fill="none"/>
-                  <rect x="16.5" y="4.5" width="3" height="3" rx="0.5" fill="white"/>
-                  <rect x="2" y="14" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2" fill="none"/>
-                  <rect x="4.5" y="16.5" width="3" height="3" rx="0.5" fill="white"/>
-                  <rect x="14" y="14" width="3" height="3" fill="white" rx="0.5"/>
-                  <rect x="19" y="14" width="3" height="3" fill="white" rx="0.5"/>
-                  <rect x="14" y="19" width="3" height="3" fill="white" rx="0.5"/>
-                  <rect x="19" y="19" width="3" height="3" fill="white" rx="0.5"/>
+                  <rect x="2" y="2" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2" fill="none" />
+                  <rect x="4.5" y="4.5" width="3" height="3" rx="0.5" fill="white" />
+                  <rect x="14" y="2" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2" fill="none" />
+                  <rect x="16.5" y="4.5" width="3" height="3" rx="0.5" fill="white" />
+                  <rect x="2" y="14" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2" fill="none" />
+                  <rect x="4.5" y="16.5" width="3" height="3" rx="0.5" fill="white" />
+                  <rect x="14" y="14" width="3" height="3" fill="white" rx="0.5" />
+                  <rect x="19" y="14" width="3" height="3" fill="white" rx="0.5" />
+                  <rect x="14" y="19" width="3" height="3" fill="white" rx="0.5" />
+                  <rect x="19" y="19" width="3" height="3" fill="white" rx="0.5" />
                 </svg>
                 <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-background animate-pulse" />
               </div>
@@ -134,6 +136,7 @@ export default function Navbar() {
                 onToggle={() => toggleDropdown('solutions')}
               />
               <NavLink to="/resources" label="Resources" />
+              <NavLink to="/blog" label="Blog" />
               <NavLink to="/pricing" label="Pricing" />
             </div>
 
@@ -146,18 +149,40 @@ export default function Navbar() {
               >
                 {theme === 'dark' ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
               </button>
-              <Link
-                to="/login"
-                className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-muted transition-colors"
-              >
-                Login
-              </Link>
-              <Link
-                to="/signup"
-                className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5"
-              >
-                Start Free Trial
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  {user?.is_admin && (
+                    <Link
+                      to="/admin"
+                      className="px-4 py-2 text-sm font-medium rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-1.5"
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                      Admin
+                    </Link>
+                  )}
+                  <Link
+                    to="/dashboard"
+                    className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5"
+                  >
+                    Dashboard
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-muted transition-colors"
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    to="/signup"
+                    className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5"
+                  >
+                    Start Free Trial
+                  </Link>
+                </>
+              )}
             </div>
 
             {/* Mobile controls — pushed to right */}
@@ -203,16 +228,16 @@ export default function Navbar() {
                 <Link to="/" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
                   <div className="w-8 h-8 bg-primary flex items-center justify-center" style={{ borderRadius: '10px' }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="2" y="2" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2.5" fill="none"/>
-                      <rect x="4.5" y="4.5" width="3" height="3" rx="0.5" fill="white"/>
-                      <rect x="14" y="2" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2.5" fill="none"/>
-                      <rect x="16.5" y="4.5" width="3" height="3" rx="0.5" fill="white"/>
-                      <rect x="2" y="14" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2.5" fill="none"/>
-                      <rect x="4.5" y="16.5" width="3" height="3" rx="0.5" fill="white"/>
-                      <rect x="14" y="14" width="3" height="3" fill="white" rx="0.5"/>
-                      <rect x="19" y="14" width="3" height="3" fill="white" rx="0.5"/>
-                      <rect x="14" y="19" width="3" height="3" fill="white" rx="0.5"/>
-                      <rect x="19" y="19" width="3" height="3" fill="white" rx="0.5"/>
+                      <rect x="2" y="2" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2.5" fill="none" />
+                      <rect x="4.5" y="4.5" width="3" height="3" rx="0.5" fill="white" />
+                      <rect x="14" y="2" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2.5" fill="none" />
+                      <rect x="16.5" y="4.5" width="3" height="3" rx="0.5" fill="white" />
+                      <rect x="2" y="14" width="8" height="8" rx="1.5" stroke="white" strokeWidth="2.5" fill="none" />
+                      <rect x="4.5" y="16.5" width="3" height="3" rx="0.5" fill="white" />
+                      <rect x="14" y="14" width="3" height="3" fill="white" rx="0.5" />
+                      <rect x="19" y="14" width="3" height="3" fill="white" rx="0.5" />
+                      <rect x="14" y="19" width="3" height="3" fill="white" rx="0.5" />
+                      <rect x="19" y="19" width="3" height="3" fill="white" rx="0.5" />
                     </svg>
                   </div>
                   <span className="text-lg font-bold">Now<span className="text-primary">QR</span></span>
@@ -233,25 +258,49 @@ export default function Navbar() {
                 <MobileAccordion label="Solutions" items={solutionsItems} onNavigate={() => setMobileOpen(false)} />
                 <MobileAccordion label="Resources" items={resourcesItems} onNavigate={() => setMobileOpen(false)} />
 
+                <MobileNavLink to="/blog" label="Blog" onClick={() => setMobileOpen(false)} />
                 <MobileNavLink to="/pricing" label="Pricing" onClick={() => setMobileOpen(false)} />
               </div>
 
               {/* Mobile CTA */}
               <div className="mt-8 space-y-3">
-                <Link
-                  to="/login"
-                  onClick={() => setMobileOpen(false)}
-                  className="block w-full text-center px-4 py-3 text-sm font-medium rounded-xl border border-border hover:bg-muted transition-colors"
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/signup"
-                  onClick={() => setMobileOpen(false)}
-                  className="block w-full text-center px-4 py-3 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-lg shadow-primary/25"
-                >
-                  Start Free Trial
-                </Link>
+                {isAuthenticated ? (
+                  <>
+                    {user?.is_admin && (
+                      <Link
+                        to="/admin"
+                        onClick={() => setMobileOpen(false)}
+                        className="block w-full text-center px-4 py-3 text-sm font-medium rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                      >
+                        Admin Panel
+                      </Link>
+                    )}
+                    <Link
+                      to="/dashboard"
+                      onClick={() => setMobileOpen(false)}
+                      className="block w-full text-center px-4 py-3 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-lg shadow-primary/25"
+                    >
+                      Dashboard
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      to="/login"
+                      onClick={() => setMobileOpen(false)}
+                      className="block w-full text-center px-4 py-3 text-sm font-medium rounded-xl border border-border hover:bg-muted transition-colors"
+                    >
+                      Login
+                    </Link>
+                    <Link
+                      to="/signup"
+                      onClick={() => setMobileOpen(false)}
+                      className="block w-full text-center px-4 py-3 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-lg shadow-primary/25"
+                    >
+                      Start Free Trial
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </div>

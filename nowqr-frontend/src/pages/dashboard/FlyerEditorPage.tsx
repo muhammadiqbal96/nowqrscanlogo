@@ -9,6 +9,13 @@ import {
 import { toPng, toJpeg } from 'html-to-image'
 import { campaignApi, scanLogoApi, aiApi } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
+import {
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectItem,
+} from '@/components/ui/select'
 import ScanLogoPreview from '@/components/ScanLogoPreview'
 import toast from 'react-hot-toast'
 
@@ -110,8 +117,18 @@ export default function FlyerEditorPage() {
                 setCampaign(camp)
                 setScanLogos(logosRes.data.data || [])
 
-                // Auto-populate canvas from campaign (keep bg dark)
-                populateFromCampaign(camp)
+                // Restore saved canvas state, or populate fresh from campaign data
+                const design = camp.page_design
+                if (design && design.elements && design.elements.length > 0) {
+                    setElements(design.elements)
+                    if (design.bgColor) setBgColor(design.bgColor)
+                    if (design.bgImage) setBgImage(design.bgImage)
+                    if (design.bgTemplate !== undefined) setBgTemplate(design.bgTemplate)
+                    if (design.aspectRatio) setAspectRatio(design.aspectRatio as AspectRatio)
+                    if (design.qrScanLogoMap) setQrScanLogoMap(design.qrScanLogoMap)
+                } else {
+                    populateFromCampaign(camp)
+                }
             } catch {
                 toast.error('Failed to load campaign')
                 navigate('/dashboard/campaigns')
@@ -262,7 +279,7 @@ export default function FlyerEditorPage() {
             const next = [...prev]
             const target = direction === 'up' ? idx + 1 : idx - 1
             if (target < 0 || target >= next.length) return prev
-            ;[next[idx], next[target]] = [next[target], next[idx]]
+                ;[next[idx], next[target]] = [next[target], next[idx]]
             return next
         })
     }
@@ -281,7 +298,7 @@ export default function FlyerEditorPage() {
                 y: (e.clientY - rect.top) / canvasScale,
             })
         }
-        ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+        ; (e.target as HTMLElement).setPointerCapture(e.pointerId)
     }
 
     const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -324,7 +341,7 @@ export default function FlyerEditorPage() {
             ex: selected.x,
             ey: selected.y,
         })
-        ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+            ; (e.target as HTMLElement).setPointerCapture(e.pointerId)
     }
 
     /* ─── Add tools ──────────────────────────────────────────── */
@@ -423,6 +440,8 @@ export default function FlyerEditorPage() {
     }
 
     /* ─── Export ──────────────────────────────────────────────── */
+    const [saving, setSaving] = useState(false)
+
     const exportFlyer = async (format: 'png' | 'jpg') => {
         if (!canvasRef.current) return
         setExporting(true)
@@ -449,11 +468,59 @@ export default function FlyerEditorPage() {
             link.href = dataUrl
             link.click()
             toast.success(`Flyer downloaded as ${format.toUpperCase()}!`)
+
+            // Also save canvas state to campaign for restoring later
+            if (campaign) {
+                campaignApi.update(campaign.id, {
+                    page_design: { elements, bgColor, bgImage, bgTemplate, aspectRatio, qrScanLogoMap },
+                }).catch(() => { /* silent */ })
+            }
         } catch (err) {
             console.error(err)
             toast.error('Export failed. Try again.')
         } finally {
             setExporting(false)
+        }
+    }
+
+    /* ─── Save Flyer to Campaign ─────────────────────────────── */
+    const saveToCampaign = async () => {
+        if (!canvasRef.current || !campaign) return
+        setSaving(true)
+        setSelectedId(null)
+        await new Promise(r => setTimeout(r, 100))
+
+        try {
+            const dataUrl = await toPng(canvasRef.current, {
+                width: canvasSize.w,
+                height: canvasSize.h,
+                style: { transform: 'none', width: `${canvasSize.w}px`, height: `${canvasSize.h}px` },
+                pixelRatio: 1,
+            })
+
+            // Convert data URL to Blob/File
+            const res = await fetch(dataUrl)
+            const blob = await res.blob()
+            const file = new File([blob], `flyer-${Date.now()}.png`, { type: 'image/png' })
+
+            const canvasState = JSON.stringify({ elements, bgColor, bgImage, bgTemplate, aspectRatio })
+
+            // Save canvas state to campaign's page_design for restoring later
+            await campaignApi.update(campaign.id, {
+                page_design: { elements, bgColor, bgImage, bgTemplate, aspectRatio, qrScanLogoMap },
+            })
+
+            await campaignApi.storeFlyer(campaign.id, {
+                title: `${campaign.name} — ${canvasSize.label}`,
+                image: file,
+                canvas_state: canvasState,
+            })
+            toast.success('Flyer saved to campaign!')
+        } catch (err) {
+            console.error(err)
+            toast.error('Failed to save flyer')
+        } finally {
+            setSaving(false)
         }
     }
 
@@ -489,7 +556,7 @@ export default function FlyerEditorPage() {
 
     /* ─── Render ─────────────────────────────────────────────── */
     if (loading) {
-        return <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+        return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
     }
 
     return (
@@ -497,7 +564,7 @@ export default function FlyerEditorPage() {
             {/* Top toolbar */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card shrink-0">
                 <div className="flex items-center gap-3">
-                    <button onClick={() => navigate(`/dashboard/campaigns`)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+                    <button onClick={() => navigate(`/dashboard/campaigns/${id}`)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
                         <ArrowLeft className="w-4 h-4" /> Back
                     </button>
                     <span className="text-sm font-medium truncate max-w-[200px]">{campaign?.name || 'Flyer'}</span>
@@ -505,20 +572,31 @@ export default function FlyerEditorPage() {
 
                 <div className="flex items-center gap-2">
                     {/* Aspect ratio */}
-                    <select
-                        value={aspectRatio}
-                        onChange={(e) => setAspectRatio(e.target.value as AspectRatio)}
-                        className="text-xs px-2 py-1.5 border border-border rounded-lg bg-card"
+                    <Select value={aspectRatio} onValueChange={v => setAspectRatio(v as AspectRatio)}>
+                        <SelectTrigger className="text-xs h-8 w-[160px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {Object.entries(CANVAS_SIZES).map(([key, val]) => (
+                                <SelectItem key={key} value={key}>{val.label} ({key})</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {/* Save to Campaign */}
+                    <button
+                        onClick={saveToCampaign}
+                        disabled={saving || exporting}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50"
                     >
-                        {Object.entries(CANVAS_SIZES).map(([key, val]) => (
-                            <option key={key} value={key}>{val.label} ({key})</option>
-                        ))}
-                    </select>
+                        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
+                        Save
+                    </button>
 
                     {/* Export */}
                     <button
                         onClick={() => exportFlyer('png')}
-                        disabled={exporting}
+                        disabled={exporting || saving}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
                     >
                         {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -526,7 +604,7 @@ export default function FlyerEditorPage() {
                     </button>
                     <button
                         onClick={() => exportFlyer('jpg')}
-                        disabled={exporting}
+                        disabled={exporting || saving}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-lg text-xs font-medium hover:bg-muted/80 disabled:opacity-50"
                     >
                         JPG
@@ -660,110 +738,110 @@ export default function FlyerEditorPage() {
                             onPointerMove={handlePointerMove}
                             onPointerUp={handlePointerUp}
                         >
-                        {/* Elements */}
-                        {elements.map(el => (
-                            <div
-                                key={el.id}
-                                data-element
-                                className={`absolute group ${selectedId === el.id ? 'z-50' : ''}`}
-                                style={{
-                                    left: el.x,
-                                    top: el.y,
-                                    width: el.width,
-                                    height: el.height,
-                                    transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-                                    cursor: el.locked ? 'default' : 'move',
-                                    outline: selectedId === el.id ? '2px solid #3b82f6' : undefined,
-                                    outlineOffset: 2,
-                                }}
-                                onPointerDown={(e) => handlePointerDown(e, el.id)}
-                                onClick={(e) => { e.stopPropagation(); setSelectedId(el.id) }}
-                                onDoubleClick={(e) => handleDoubleClick(e, el)}
-                            >
-                                {/* Element content */}
-                                {el.type === 'text' && (
-                                    editingTextId === el.id ? (
-                                        <textarea
-                                            autoFocus
-                                            value={el.content || ''}
-                                            onChange={(e) => updateElement(el.id, { content: e.target.value })}
-                                            onBlur={() => setEditingTextId(null)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            onPointerDown={(e) => e.stopPropagation()}
-                                            className="w-full h-full bg-transparent border-none outline-none resize-none p-0"
-                                            style={{
-                                                fontSize: el.fontSize,
-                                                fontFamily: el.fontFamily,
-                                                fontWeight: el.fontWeight as any,
-                                                fontStyle: el.fontStyle,
-                                                color: el.textColor,
-                                                textAlign: el.textAlign as any,
-                                                lineHeight: 1.3,
-                                            }}
-                                        />
-                                    ) : (
+                            {/* Elements */}
+                            {elements.map(el => (
+                                <div
+                                    key={el.id}
+                                    data-element
+                                    className={`absolute group ${selectedId === el.id ? 'z-50' : ''}`}
+                                    style={{
+                                        left: el.x,
+                                        top: el.y,
+                                        width: el.width,
+                                        height: el.height,
+                                        transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                                        cursor: el.locked ? 'default' : 'move',
+                                        outline: selectedId === el.id ? '2px solid #3b82f6' : undefined,
+                                        outlineOffset: 2,
+                                    }}
+                                    onPointerDown={(e) => handlePointerDown(e, el.id)}
+                                    onClick={(e) => { e.stopPropagation(); setSelectedId(el.id) }}
+                                    onDoubleClick={(e) => handleDoubleClick(e, el)}
+                                >
+                                    {/* Element content */}
+                                    {el.type === 'text' && (
+                                        editingTextId === el.id ? (
+                                            <textarea
+                                                autoFocus
+                                                value={el.content || ''}
+                                                onChange={(e) => updateElement(el.id, { content: e.target.value })}
+                                                onBlur={() => setEditingTextId(null)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                onPointerDown={(e) => e.stopPropagation()}
+                                                className="w-full h-full bg-transparent border-none outline-none resize-none p-0"
+                                                style={{
+                                                    fontSize: el.fontSize,
+                                                    fontFamily: el.fontFamily,
+                                                    fontWeight: el.fontWeight as any,
+                                                    fontStyle: el.fontStyle,
+                                                    color: el.textColor,
+                                                    textAlign: el.textAlign as any,
+                                                    lineHeight: 1.3,
+                                                }}
+                                            />
+                                        ) : (
+                                            <div
+                                                className="w-full h-full overflow-hidden"
+                                                style={{
+                                                    fontSize: el.fontSize,
+                                                    fontFamily: el.fontFamily,
+                                                    fontWeight: el.fontWeight as any,
+                                                    fontStyle: el.fontStyle,
+                                                    color: el.textColor,
+                                                    textAlign: el.textAlign as any,
+                                                    lineHeight: 1.3,
+                                                    wordBreak: 'break-word',
+                                                }}
+                                            >
+                                                {el.content}
+                                            </div>
+                                        )
+                                    )}
+
+                                    {el.type === 'image' && (
+                                        <img src={el.src} alt="" className="w-full h-full pointer-events-none"
+                                            style={{ objectFit: (el.objectFit || 'cover') as any, borderRadius: el.borderRadius || 0 }} />
+                                    )}
+
+                                    {el.type === 'shape' && (
+                                        <div className="w-full h-full" style={{
+                                            backgroundColor: el.bgColor || '#c8401a',
+                                            borderRadius: el.borderRadius || 0,
+                                            opacity: el.opacity ?? 1,
+                                            border: el.borderWidth ? `${el.borderWidth}px solid ${el.borderColor || '#fff'}` : undefined,
+                                        }} />
+                                    )}
+
+                                    {el.type === 'qr' && (() => {
+                                        const logo = getQrScanLogo(el.id)
+                                        return (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <ScanLogoPreview
+                                                    url={'https://nowqr.com'}
+                                                    shortUrl={logo?.short_url}
+                                                    shape={logo?.shape || 'shield'}
+                                                    animation="none"
+                                                    color={logo?.color || campaign?.primary_color || '#c8401a'}
+                                                    ctaText={logo?.cta_text || campaign?.cta_button_text || 'SCAN ME'}
+                                                    safeScanBadge={false}
+                                                    centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
+                                                    size={Math.min(el.width, el.height) - 20}
+                                                    minimal
+                                                />
+                                            </div>
+                                        )
+                                    })()}
+
+                                    {/* Resize handle */}
+                                    {selectedId === el.id && !el.locked && (
                                         <div
-                                            className="w-full h-full overflow-hidden"
-                                            style={{
-                                                fontSize: el.fontSize,
-                                                fontFamily: el.fontFamily,
-                                                fontWeight: el.fontWeight as any,
-                                                fontStyle: el.fontStyle,
-                                                color: el.textColor,
-                                                textAlign: el.textAlign as any,
-                                                lineHeight: 1.3,
-                                                wordBreak: 'break-word',
-                                            }}
-                                        >
-                                            {el.content}
-                                        </div>
-                                    )
-                                )}
-
-                                {el.type === 'image' && (
-                                    <img src={el.src} alt="" className="w-full h-full pointer-events-none"
-                                        style={{ objectFit: (el.objectFit || 'cover') as any, borderRadius: el.borderRadius || 0 }} />
-                                )}
-
-                                {el.type === 'shape' && (
-                                    <div className="w-full h-full" style={{
-                                        backgroundColor: el.bgColor || '#c8401a',
-                                        borderRadius: el.borderRadius || 0,
-                                        opacity: el.opacity ?? 1,
-                                        border: el.borderWidth ? `${el.borderWidth}px solid ${el.borderColor || '#fff'}` : undefined,
-                                    }} />
-                                )}
-
-                                {el.type === 'qr' && (() => {
-                                    const logo = getQrScanLogo(el.id)
-                                    return (
-                                    <div className="w-full h-full flex items-center justify-center">
-                                        <ScanLogoPreview
-                                            url={'https://nowqr.com'}
-                                            shortUrl={logo?.short_url}
-                                            shape={logo?.shape || 'shield'}
-                                            animation="none"
-                                            color={logo?.color || campaign?.primary_color || '#c8401a'}
-                                            ctaText={logo?.cta_text || campaign?.cta_button_text || 'SCAN ME'}
-                                            safeScanBadge={false}
-                                            centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
-                                            size={Math.min(el.width, el.height) - 20}
-                                            minimal
+                                            className="absolute -bottom-2 -right-2 w-5 h-5 bg-blue-500 border-2 border-white rounded-sm cursor-nwse-resize z-50"
+                                            onPointerDown={(e) => handleResizeStart(e, 'br')}
                                         />
-                                    </div>
-                                    )
-                                })()}
-
-                                {/* Resize handle */}
-                                {selectedId === el.id && !el.locked && (
-                                    <div
-                                        className="absolute -bottom-2 -right-2 w-5 h-5 bg-blue-500 border-2 border-white rounded-sm cursor-nwse-resize z-50"
-                                        onPointerDown={(e) => handleResizeStart(e, 'br')}
-                                    />
-                                )}
-                            </div>
-                        ))}
-                    </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
                     </div>{/* end scaled wrapper */}
                 </div>
 
@@ -828,12 +906,16 @@ export default function FlyerEditorPage() {
                                     <>
                                         <div>
                                             <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Typography</p>
-                                            <select value={selected.fontFamily || 'Inter'} onChange={e => updateElement(selected.id, { fontFamily: e.target.value })}
-                                                className="w-full px-2 py-1.5 text-xs border border-border rounded bg-background mb-1.5">
-                                                {['Inter', 'Poppins', 'Playfair Display', 'Roboto', 'Montserrat', 'Lato', 'Georgia', 'Arial'].map(f =>
-                                                    <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
-                                                )}
-                                            </select>
+                                            <Select value={selected.fontFamily || 'Inter'} onValueChange={v => updateElement(selected.id, { fontFamily: v })}>
+                                                <SelectTrigger className="text-xs h-8 mb-1.5">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {['Inter', 'Poppins', 'Playfair Display', 'Roboto', 'Montserrat', 'Lato', 'Georgia', 'Arial'].map(f =>
+                                                        <SelectItem key={f} value={f}>{f}</SelectItem>
+                                                    )}
+                                                </SelectContent>
+                                            </Select>
                                             <div className="flex items-center gap-1.5">
                                                 <input type="number" min={8} max={200} value={selected.fontSize || 32}
                                                     onChange={e => updateElement(selected.id, { fontSize: +e.target.value })}
@@ -900,13 +982,16 @@ export default function FlyerEditorPage() {
                                     <>
                                         <div>
                                             <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Fit</p>
-                                            <select value={selected.objectFit || 'cover'}
-                                                onChange={e => updateElement(selected.id, { objectFit: e.target.value })}
-                                                className="w-full px-2 py-1.5 text-xs border border-border rounded bg-background">
-                                                <option value="cover">Cover</option>
-                                                <option value="contain">Contain</option>
-                                                <option value="fill">Stretch</option>
-                                            </select>
+                                            <Select value={selected.objectFit || 'cover'} onValueChange={v => updateElement(selected.id, { objectFit: v })}>
+                                                <SelectTrigger className="text-xs h-8">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="cover">Cover</SelectItem>
+                                                    <SelectItem value="contain">Contain</SelectItem>
+                                                    <SelectItem value="fill">Stretch</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Corner Radius</p>
@@ -923,17 +1008,18 @@ export default function FlyerEditorPage() {
                                         <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">ScanLogo</p>
                                         {scanLogos.length > 0 ? (
                                             <>
-                                                <select
-                                                    value={qrScanLogoMap[selected.id] ?? scanLogos[0]?.id ?? ''}
-                                                    onChange={e => setQrScanLogoMap(prev => ({ ...prev, [selected.id]: +e.target.value }))}
-                                                    className="w-full px-2 py-1.5 text-xs border border-border rounded bg-background"
-                                                >
-                                                    {scanLogos.map(sl => (
-                                                        <option key={sl.id} value={sl.id}>
-                                                            {sl.name || `ScanLogo #${sl.id}`} — {sl.shape}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                <Select value={String(qrScanLogoMap[selected.id] ?? scanLogos[0]?.id ?? '')} onValueChange={v => setQrScanLogoMap(prev => ({ ...prev, [selected.id]: +v }))}>
+                                                    <SelectTrigger className="text-xs h-8">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {scanLogos.map(sl => (
+                                                            <SelectItem key={sl.id} value={String(sl.id)}>
+                                                                {sl.name || `ScanLogo #${sl.id}`} — {sl.shape}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                                 <p className="text-[10px] text-muted-foreground">
                                                     Drag to reposition. Resize to adjust size.
                                                 </p>

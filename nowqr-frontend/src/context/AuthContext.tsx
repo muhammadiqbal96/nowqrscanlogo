@@ -11,6 +11,7 @@ export interface User {
   plan: 'free' | 'creator' | 'agency';
   credits: number;
   avatar: string | null;
+  is_admin?: boolean;
   created_at?: string;
 }
 

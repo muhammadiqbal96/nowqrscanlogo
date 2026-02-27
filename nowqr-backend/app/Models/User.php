@@ -21,6 +21,9 @@ class User extends Authenticatable
         'avatar',
         'plan',
         'credits',
+        'is_admin',
+        'is_blocked',
+        'blocked_at',
     ];
 
     protected $hidden = [
@@ -35,6 +38,9 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'credits' => 'integer',
+            'is_admin' => 'boolean',
+            'is_blocked' => 'boolean',
+            'blocked_at' => 'datetime',
         ];
     }
 
@@ -72,6 +78,26 @@ class User extends Authenticatable
     public function scanEvents()
     {
         return $this->hasMany(ScanEvent::class);
+    }
+
+    public function blogs()
+    {
+        return $this->hasMany(Blog::class, 'author_id');
+    }
+
+    public function connectedPlatforms()
+    {
+        return $this->hasMany(ConnectedPlatform::class);
+    }
+
+    public function autoPostSubscriptions()
+    {
+        return $this->hasMany(AutoPostSubscription::class);
+    }
+
+    public function autoPosts()
+    {
+        return $this->hasMany(AutoPost::class);
     }
 
     // Credit helpers

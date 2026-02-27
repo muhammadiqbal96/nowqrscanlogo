@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation, Outlet } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
@@ -13,9 +13,12 @@ import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
 import AuthCallbackPage from '@/pages/AuthCallbackPage'
 import ResetPasswordPage from '@/pages/ResetPasswordPage'
 import ProtectedRoute from '@/components/ProtectedRoute'
+import AdminRoute from '@/components/AdminRoute'
 import DashboardLayout from '@/components/layout/DashboardLayout'
+import AdminLayout from '@/components/layout/AdminLayout'
 import DashboardHomePage from '@/pages/dashboard/DashboardHomePage'
 import CampaignBuilderPage from '@/pages/dashboard/CampaignBuilderPage'
+import CampaignDetailPage from '@/pages/dashboard/CampaignDetailPage'
 import CampaignsListPage from '@/pages/dashboard/CampaignsListPage'
 import ScanLogoBuilderPage from '@/pages/dashboard/ScanLogoBuilderPage'
 import ScanLogosListPage from '@/pages/dashboard/ScanLogosListPage'
@@ -25,6 +28,17 @@ import SettingsPage from '@/pages/dashboard/SettingsPage'
 import CreditsPage from '@/pages/dashboard/CreditsPage'
 import FlyerEditorPage from '@/pages/dashboard/FlyerEditorPage'
 import CampaignPublicPage from '@/pages/CampaignPublicPage'
+import BlogListPage from '@/pages/BlogListPage'
+import BlogDetailPage from '@/pages/BlogDetailPage'
+import AdminDashboardPage from '@/pages/admin/AdminDashboardPage'
+import AdminUsersPage from '@/pages/admin/AdminUsersPage'
+import AdminBlogsPage from '@/pages/admin/AdminBlogsPage'
+import AdminAutoPostPage from '@/pages/admin/AdminAutoPostPage'
+import AutoPostDashboardPage from '@/pages/dashboard/autopost/AutoPostDashboardPage'
+import PlatformsPage from '@/pages/dashboard/autopost/PlatformsPage'
+import SubscriptionsPage from '@/pages/dashboard/autopost/SubscriptionsPage'
+import NewSubscriptionPage from '@/pages/dashboard/autopost/NewSubscriptionPage'
+import PostsPage from '@/pages/dashboard/autopost/PostsPage'
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
@@ -46,9 +60,10 @@ function ScrollToTop() {
 function App() {
   const location = useLocation()
   const isDashboard = location.pathname.startsWith('/dashboard')
+  const isAdmin = location.pathname.startsWith('/admin')
   const isAuthPage = ['/login', '/signup', '/forgot-password', '/auth/callback', '/reset-password'].includes(location.pathname)
   const isPublicPage = location.pathname.startsWith('/p/')
-  const showChrome = !isAuthPage && !isDashboard && !isPublicPage
+  const showChrome = !isAuthPage && !isDashboard && !isAdmin && !isPublicPage
 
   return (
     <div className="min-h-screen flex flex-col overflow-x-hidden">
@@ -62,6 +77,10 @@ function App() {
           <Route path="/solutions" element={<SolutionsPage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/resources" element={<ResourcesPage />} />
+
+          {/* Public blog pages */}
+          <Route path="/blog" element={<BlogListPage />} />
+          <Route path="/blog/:slug" element={<BlogDetailPage />} />
 
           {/* Public campaign pages */}
           <Route path="/p/:slug" element={<CampaignPublicPage />} />
@@ -79,7 +98,7 @@ function App() {
               <Route index element={<DashboardHomePage />} />
               <Route path="campaigns" element={<CampaignsListPage />} />
               <Route path="campaigns/new" element={<CampaignBuilderPage />} />
-              <Route path="campaigns/:id" element={<CampaignBuilderPage />} />
+              <Route path="campaigns/:id" element={<CampaignDetailPage />} />
               <Route path="campaigns/:id/flyer" element={<FlyerEditorPage />} />
               <Route path="scanlogos" element={<ScanLogosListPage />} />
               <Route path="scanlogos/new" element={<ScanLogoBuilderPage />} />
@@ -87,6 +106,21 @@ function App() {
               <Route path="analytics" element={<AnalyticsDashboardPage />} />
               <Route path="credits" element={<CreditsPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="autopost" element={<AutoPostDashboardPage />} />
+              <Route path="autopost/platforms" element={<PlatformsPage />} />
+              <Route path="autopost/subscriptions" element={<SubscriptionsPage />} />
+              <Route path="autopost/subscriptions/new" element={<NewSubscriptionPage />} />
+              <Route path="autopost/posts" element={<PostsPage />} />
+            </Route>
+          </Route>
+
+          {/* Admin Panel (protected + admin only) */}
+          <Route element={<AdminRoute />}>
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<AdminDashboardPage />} />
+              <Route path="users" element={<AdminUsersPage />} />
+              <Route path="blogs" element={<AdminBlogsPage />} />
+              <Route path="autopost" element={<AdminAutoPostPage />} />
             </Route>
           </Route>
         </Routes>

@@ -26,6 +26,13 @@ class LoginController extends Controller
             ]);
         }
 
+        // Check if user is blocked
+        if ($user->is_blocked) {
+            throw ValidationException::withMessages([
+                'email' => ['Your account has been blocked. Please contact support.'],
+            ]);
+        }
+
         // Revoke previous tokens if desired (optional, for single session)
         // $user->tokens()->delete();
 
@@ -43,6 +50,7 @@ class LoginController extends Controller
                 'plan' => $user->plan,
                 'credits' => $user->credits,
                 'avatar' => $user->avatar_url,
+                'is_admin' => $user->is_admin,
             ],
             'token' => $token,
         ]);
@@ -72,6 +80,7 @@ class LoginController extends Controller
                 'plan' => $user->plan,
                 'credits' => $user->credits,
                 'avatar' => $user->avatar_url,
+                'is_admin' => $user->is_admin,
                 'created_at' => $user->created_at,
             ],
         ]);

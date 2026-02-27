@@ -5,6 +5,7 @@ import TestimonialsSection from '@/components/home/TestimonialsSection'
 import SolutionsPreview from '@/components/home/SolutionsPreview'
 import PricingPreview from '@/components/home/PricingPreview'
 import GallerySection from '@/components/home/GallerySection'
+import LatestBlogsSection from '@/components/home/LatestBlogsSection'
 
 export default function HomePage() {
   return (
@@ -14,6 +15,7 @@ export default function HomePage() {
       <SolutionsPreview />
       <GallerySection />
       <HowItWorksSection />
+      <LatestBlogsSection />
       <TestimonialsSection />
       <PricingPreview />
     </>

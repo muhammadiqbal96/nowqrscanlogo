@@ -88,6 +88,11 @@ class Campaign extends Model
         return $this->hasMany(ScanEvent::class);
     }
 
+    public function flyers()
+    {
+        return $this->hasMany(CampaignFlyer::class);
+    }
+
     // Helpers
     public function getPublicUrlAttribute(): string
     {

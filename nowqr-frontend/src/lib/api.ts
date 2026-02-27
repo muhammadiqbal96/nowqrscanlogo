@@ -90,6 +90,18 @@ export const campaignApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  listFlyers: (id: number) => api.get(`/campaigns/${id}/flyers`),
+  storeFlyer: (id: number, data: { title?: string; image: File; canvas_state?: string }) => {
+    const formData = new FormData();
+    if (data.title) formData.append('title', data.title);
+    formData.append('image', data.image);
+    if (data.canvas_state) formData.append('canvas_state', data.canvas_state);
+    return api.post(`/campaigns/${id}/flyers`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  deleteFlyer: (campaignId: number, flyerId: number) =>
+    api.delete(`/campaigns/${campaignId}/flyers/${flyerId}`),
 };
 
 // ─── ScanLogo API ────────────────────────────────────────────────
@@ -175,4 +187,164 @@ export const profileApi = {
 // ─── Pricing API ─────────────────────────────────────────────────
 export const pricingApi = {
   get: () => api.get('/pricing'),
+};
+
+// ─── Blog API (Public) ───────────────────────────────────────────
+export const blogApi = {
+  list: (page = 1, category?: string, search?: string) => {
+    const params = new URLSearchParams({ page: String(page) });
+    if (category) params.append('category', category);
+    if (search) params.append('search', search);
+    return api.get(`/blogs?${params}`);
+  },
+  latest: () => api.get('/blogs/latest'),
+  get: (slug: string) => api.get(`/blogs/${slug}`),
+};
+
+// ─── Connected Platforms API ─────────────────────────────────────
+export const platformApi = {
+  list: () => api.get('/platforms'),
+  get: (id: number) => api.get(`/platforms/${id}`),
+  create: (data: {
+    name: string;
+    type: string;
+    site_url: string;
+    api_key?: string;
+    api_secret?: string;
+    username?: string;
+  }) => api.post('/platforms', data),
+  update: (id: number, data: Record<string, unknown>) =>
+    api.put(`/platforms/${id}`, data),
+  delete: (id: number) => api.delete(`/platforms/${id}`),
+  testConnection: (id: number) => api.post(`/platforms/${id}/test`),
+};
+
+// ─── Auto-Post Subscription API ──────────────────────────────────
+export const autoPostSubApi = {
+  list: () => api.get('/autopost/subscriptions'),
+  get: (id: number) => api.get(`/autopost/subscriptions/${id}`),
+  create: (data: {
+    frequency: string;
+    posts_per_cycle: number;
+    niche?: string;
+    tone?: string;
+    keywords?: string[];
+    custom_instructions?: string;
+  }) => api.post('/autopost/subscriptions', data),
+  update: (id: number, data: Record<string, unknown>) =>
+    api.put(`/autopost/subscriptions/${id}`, data),
+  cancel: (id: number) => api.delete(`/autopost/subscriptions/${id}`),
+  pricing: () => api.get('/autopost/pricing'),
+};
+
+// ─── Auto-Post API ──────────────────────────────────────────────
+export const autoPostApi = {
+  stats: () => api.get('/autopost/stats'),
+  list: (page = 1, status?: string, subscriptionId?: number) => {
+    const params = new URLSearchParams({ page: String(page) });
+    if (status) params.append('status', status);
+    if (subscriptionId) params.append('subscription_id', String(subscriptionId));
+    return api.get(`/autopost/posts?${params}`);
+  },
+  get: (id: number) => api.get(`/autopost/posts/${id}`),
+  create: (data: {
+    subscription_id: number;
+    platform_id?: number;
+    title: string;
+    excerpt?: string;
+    content: string;
+    category?: string;
+    tags?: string[];
+    status?: string;
+    scheduled_at?: string;
+  }) => api.post('/autopost/posts', data),
+  update: (id: number, data: Record<string, unknown>) =>
+    api.put(`/autopost/posts/${id}`, data),
+  delete: (id: number) => api.delete(`/autopost/posts/${id}`),
+  publish: (id: number) => api.post(`/autopost/posts/${id}/publish`),
+};
+
+// ─── Admin API ───────────────────────────────────────────────────
+export const adminApi = {
+  // Dashboard
+  stats: () => api.get('/admin/stats'),
+
+  // Users
+  users: {
+    list: (page = 1, search?: string, plan?: string, blocked?: string) => {
+      const params = new URLSearchParams({ page: String(page) });
+      if (search) params.append('search', search);
+      if (plan) params.append('plan', plan);
+      if (blocked) params.append('blocked', blocked);
+      return api.get(`/admin/users?${params}`);
+    },
+    get: (id: number) => api.get(`/admin/users/${id}`),
+    block: (id: number) => api.post(`/admin/users/${id}/block`),
+    unblock: (id: number) => api.post(`/admin/users/${id}/unblock`),
+    giveCredits: (id: number, amount: number, reason: string) =>
+      api.post(`/admin/users/${id}/give-credits`, { amount, reason }),
+    changePlan: (id: number, plan: string) =>
+      api.post(`/admin/users/${id}/change-plan`, { plan }),
+    toggleAdmin: (id: number) =>
+      api.post(`/admin/users/${id}/toggle-admin`),
+    delete: (id: number) => api.delete(`/admin/users/${id}`),
+  },
+
+  // Blogs
+  blogs: {
+    list: (page = 1, search?: string, status?: string) => {
+      const params = new URLSearchParams({ page: String(page) });
+      if (search) params.append('search', search);
+      if (status) params.append('status', status);
+      return api.get(`/admin/blogs?${params}`);
+    },
+    get: (id: number) => api.get(`/admin/blogs/${id}`),
+    create: (data: {
+      title: string;
+      excerpt?: string;
+      content: string;
+      category?: string;
+      tags?: string[];
+      status?: string;
+    }) => api.post('/admin/blogs', data),
+    update: (id: number, data: Record<string, unknown>) =>
+      api.put(`/admin/blogs/${id}`, data),
+    delete: (id: number) => api.delete(`/admin/blogs/${id}`),
+    uploadCover: (id: number, file: File) => {
+      const formData = new FormData();
+      formData.append('cover_image', file);
+      return api.post(`/admin/blogs/${id}/cover`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    uploadContentImage: (file: File) => {
+      const formData = new FormData();
+      formData.append('image', file);
+      return api.post('/admin/blogs/upload-image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+  },
+
+  // Auto-Post management
+  autoPost: {
+    stats: () => api.get('/admin/autopost/stats'),
+    subscriptions: (page = 1, status?: string, frequency?: string, search?: string) => {
+      const params = new URLSearchParams({ page: String(page) });
+      if (status) params.append('status', status);
+      if (frequency) params.append('frequency', frequency);
+      if (search) params.append('search', search);
+      return api.get(`/admin/autopost/subscriptions?${params}`);
+    },
+    cancelSubscription: (id: number) =>
+      api.post(`/admin/autopost/subscriptions/${id}/cancel`),
+    posts: (page = 1, status?: string, search?: string) => {
+      const params = new URLSearchParams({ page: String(page) });
+      if (status) params.append('status', status);
+      if (search) params.append('search', search);
+      return api.get(`/admin/autopost/posts?${params}`);
+    },
+    getPost: (id: number) => api.get(`/admin/autopost/posts/${id}`),
+    deletePost: (id: number) => api.delete(`/admin/autopost/posts/${id}`),
+  },
 };

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Campaign;
+use App\Models\CampaignFlyer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -53,6 +54,13 @@ class CampaignController extends Controller
 
         $campaign->load(['scanLogos', 'scanEvents']);
         $campaign->loadCount('scanEvents');
+
+        // Load flyers if table exists
+        try {
+            $campaign->load('flyers');
+        } catch (\Exception $e) {
+            // flyers table may not exist yet
+        }
 
         return response()->json(['campaign' => $campaign]);
     }
@@ -207,5 +215,67 @@ class CampaignController extends Controller
                 ]),
             ],
         ]);
+    }
+
+    /* ─── Campaign Flyers ────────────────────────────────────── */
+
+    /**
+     * List flyers for a campaign.
+     */
+    public function listFlyers(Request $request, Campaign $campaign): JsonResponse
+    {
+        $this->authorize($request, $campaign);
+
+        return response()->json([
+            'flyers' => $campaign->flyers()->orderBy('created_at', 'desc')->get(),
+        ]);
+    }
+
+    /**
+     * Upload / save a flyer for a campaign.
+     */
+    public function storeFlyer(Request $request, Campaign $campaign): JsonResponse
+    {
+        $this->authorize($request, $campaign);
+
+        $request->validate([
+            'title' => ['nullable', 'string', 'max:255'],
+            'image' => ['required', 'image', 'max:10240'], // 10MB
+            'canvas_state' => ['nullable', 'json'],
+        ]);
+
+        $path = $request->file('image')->store("campaigns/{$campaign->id}/flyers", 'public');
+
+        $flyer = $campaign->flyers()->create([
+            'title' => $request->input('title', 'Untitled Flyer'),
+            'image_path' => $path,
+            'canvas_state' => $request->input('canvas_state') ? json_decode($request->input('canvas_state'), true) : null,
+        ]);
+
+        return response()->json([
+            'message' => 'Flyer saved successfully',
+            'flyer' => $flyer,
+        ], 201);
+    }
+
+    /**
+     * Delete a flyer.
+     */
+    public function destroyFlyer(Request $request, Campaign $campaign, CampaignFlyer $flyer): JsonResponse
+    {
+        $this->authorize($request, $campaign);
+
+        if ($flyer->campaign_id !== $campaign->id) {
+            abort(403, 'Flyer does not belong to this campaign');
+        }
+
+        // Delete file
+        if ($flyer->image_path) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($flyer->image_path);
+        }
+
+        $flyer->delete();
+
+        return response()->json(['message' => 'Flyer deleted successfully']);
     }
 }

@@ -2,8 +2,15 @@ import { useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
     LayoutDashboard, Megaphone, QrCode, BarChart3, Settings, CreditCard,
-    LogOut, Menu, X, ChevronDown, Sun, Moon, Plus
+    LogOut, Menu, X, Sun, Moon, Plus, Shield, Send
 } from 'lucide-react'
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import toast from 'react-hot-toast'
@@ -12,6 +19,7 @@ const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
     { icon: Megaphone, label: 'Campaigns', path: '/dashboard/campaigns' },
     { icon: QrCode, label: 'ScanLogos', path: '/dashboard/scanlogos' },
+    { icon: Send, label: 'Auto-Post', path: '/dashboard/autopost' },
     { icon: BarChart3, label: 'Analytics', path: '/dashboard/analytics' },
     { icon: CreditCard, label: 'Credits', path: '/dashboard/credits' },
     { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
@@ -23,7 +31,6 @@ export default function DashboardLayout() {
     const location = useLocation()
     const navigate = useNavigate()
     const [sidebarOpen, setSidebarOpen] = useState(false)
-    const [profileOpen, setProfileOpen] = useState(false)
 
     const handleLogout = async () => {
         await logout()
@@ -67,8 +74,8 @@ export default function DashboardLayout() {
                         to={item.path}
                         onClick={() => setSidebarOpen(false)}
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${isActive(item.path)
-                                ? 'bg-primary/10 text-primary'
-                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                             }`}
                     >
                         <item.icon className="w-4.5 h-4.5" />
@@ -79,6 +86,15 @@ export default function DashboardLayout() {
 
             {/* Credits */}
             <div className="p-4 border-t border-border">
+                {user?.is_admin && (
+                    <Link
+                        to="/admin"
+                        className="flex items-center justify-center gap-2 w-full py-2.5 mb-3 bg-red-500/10 text-red-600 dark:text-red-400 font-semibold rounded-xl hover:bg-red-500/20 transition-all text-sm border border-red-500/20"
+                    >
+                        <Shield className="w-4 h-4" />
+                        Admin Panel
+                    </Link>
+                )}
                 <div className="bg-muted rounded-xl p-3">
                     <div className="flex items-center justify-between mb-1">
                         <span className="text-xs text-muted-foreground">Credits</span>
@@ -113,9 +129,9 @@ export default function DashboardLayout() {
     )
 
     return (
-        <div className="min-h-screen flex bg-background">
+        <div className="h-screen flex bg-background overflow-hidden">
             {/* Desktop Sidebar */}
-            <aside className="hidden lg:flex w-64 border-r border-border flex-col bg-card">
+            <aside className="hidden lg:flex w-64 border-r border-border flex-col bg-card flex-shrink-0 overflow-y-auto">
                 {sidebar}
             </aside>
 
@@ -133,7 +149,7 @@ export default function DashboardLayout() {
             )}
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
                 {/* Topbar */}
                 <header className="h-16 border-b border-border bg-card flex items-center justify-between px-4 lg:px-8">
                     <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-muted-foreground hover:text-foreground">
@@ -148,32 +164,30 @@ export default function DashboardLayout() {
                         </button>
 
                         {/* Profile dropdown */}
-                        <div className="relative">
-                            <button onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted transition-colors">
-                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs overflow-hidden">
-                                    {user?.avatar ? (
-                                        <img src={user.avatar} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <>{user?.first_name?.[0]}{user?.last_name?.[0]}</>
-                                    )}
-                                </div>
-                                <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-                            </button>
-
-                            {profileOpen && (
-                                <>
-                                    <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
-                                    <div className="absolute right-0 top-full mt-2 w-48 bg-card border border-border rounded-xl shadow-lg z-50 py-1">
-                                        <Link to="/dashboard/settings" onClick={() => setProfileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-muted transition-colors">
-                                            <Settings className="w-4 h-4" /> Settings
-                                        </Link>
-                                        <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2.5 text-sm text-destructive hover:bg-muted w-full text-left transition-colors">
-                                            <LogOut className="w-4 h-4" /> Sign out
-                                        </button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted transition-colors">
+                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs overflow-hidden">
+                                        {user?.avatar ? (
+                                            <img src={user.avatar} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <>{user?.first_name?.[0]}{user?.last_name?.[0]}</>
+                                        )}
                                     </div>
-                                </>
-                            )}
-                        </div>
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem asChild>
+                                    <Link to="/dashboard/settings" className="flex items-center gap-2">
+                                        <Settings className="w-4 h-4" /> Settings
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                                    <LogOut className="w-4 h-4" /> Sign out
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </header>
 
