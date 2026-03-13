@@ -58,10 +58,14 @@ class AiContentController extends Controller
             $apiKey = config('services.openai.api_key');
 
             if (!$apiKey || $apiKey === 'your-openai-api-key') {
-                // Return mock data in development
                 $generated = $this->getMockContent($validated, $ctaLabel);
             } else {
-                $generated = $this->callOpenAI($prompt, $apiKey);
+                try {
+                    $generated = $this->callOpenAI($prompt, $apiKey);
+                } catch (\Exception $aiEx) {
+                    Log::warning('OpenAI API failed, using smart fallback: ' . $aiEx->getMessage());
+                    $generated = $this->getMockContent($validated, $ctaLabel);
+                }
             }
 
             // Deduct credits
@@ -141,13 +145,24 @@ PROMPT;
                 "Authorization: Bearer {$apiKey}",
             ],
             CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
         ]);
 
         $response = curl_exec($ch);
+        $errno = curl_errno($ch);
+        $curlError = curl_error($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
+        if ($errno) {
+            Log::error("OpenAI curl error [{$errno}]: {$curlError}");
+            throw new \Exception("Network error contacting OpenAI: {$curlError}");
+        }
+
         if ($httpCode !== 200) {
+            Log::error("OpenAI API error [{$httpCode}]: {$response}");
             throw new \Exception("OpenAI API returned status {$httpCode}: {$response}");
         }
 
@@ -170,11 +185,83 @@ PROMPT;
     private function getMockContent(array $data, string $ctaLabel): array
     {
         $businessName = $data['business_name'];
+        $desc = $data['business_description'] ?? '';
+        $audience = $data['target_audience'] ?? '';
+        $cta = $data['cta_type'] ?? 'buy';
+
+        // Context-aware headlines per CTA type
+        $headlines = [
+            'buy' => [
+                "Get {$businessName} Today",
+                "Elevate Your Style with {$businessName}",
+                "Shop the {$businessName} Collection",
+                "Premium Quality, Unbeatable Value",
+            ],
+            'give' => [
+                "Support {$businessName} Today",
+                "Make a Difference with {$businessName}",
+                "Your Gift Changes Lives",
+                "Join the {$businessName} Mission",
+            ],
+            'call' => [
+                "Talk to {$businessName} Experts",
+                "Get Expert Advice Today",
+                "We're Just a Call Away",
+                "Connect with {$businessName} Now",
+            ],
+            'book' => [
+                "Reserve Your Spot at {$businessName}",
+                "Book Your {$businessName} Session",
+                "Schedule Today, Thank Us Later",
+                "Appointments Made Simple",
+            ],
+            'watch' => [
+                "Watch {$businessName} in Action",
+                "See What Makes Us Different",
+                "Experience {$businessName} Live",
+                "Don't Miss This — Watch Now",
+            ],
+            'order' => [
+                "Order from {$businessName} Now",
+                "Fresh. Fast. Delivered.",
+                "Craving Something Great?",
+                "Taste the {$businessName} Difference",
+            ],
+            'pay' => [
+                "Quick & Secure Payments",
+                "Pay with Confidence at {$businessName}",
+                "Simple Payments, Happy Customers",
+                "Fast Checkout, Zero Hassle",
+            ],
+            'custom' => [
+                "Discover {$businessName} Today",
+                "Your Next Favorite Awaits",
+                "Experience Something Special",
+                "Don't Miss Out on {$businessName}",
+            ],
+        ];
+
+        $headlinePool = $headlines[$cta] ?? $headlines['custom'];
+        $headline = $headlinePool[array_rand($headlinePool)];
+
+        $subHeadlines = [
+            "Trusted by thousands who demand the best",
+            "Quality you can see, value you can feel",
+            "Where excellence meets affordability",
+            "Your satisfaction is our top priority",
+            "Join our growing community today",
+            "The smart choice for savvy customers",
+        ];
+
+        // Build description from the business description input
+        $descText = $desc
+            ? "Discover what makes {$businessName} special. " . ucfirst(substr($desc, 0, 120)) . "."
+            : "Experience the difference with {$businessName}. We deliver exceptional value tailored to your needs. Don't miss out on what we have to offer.";
 
         return [
-            'headline' => "Discover What {$businessName} Has for You",
-            'sub_headline' => "Your trusted partner for quality and excellence",
-            'description' => "Experience the difference with {$businessName}. We deliver exceptional value tailored to your needs. Don't miss out on what we have to offer.",
+            'headline' => $headline,
+            'sub_headline' => $subHeadlines[array_rand($subHeadlines)],
+            'description' => $descText,
             'cta_button_text' => $ctaLabel,
         ];
     }

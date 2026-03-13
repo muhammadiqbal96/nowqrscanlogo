@@ -99,15 +99,23 @@ export default function HeroSection() {
           {/* Right visual - ScanLogo mockup + Images */}
           <div className={isVisible ? 'animate-fade-in-up delay-300' : 'opacity-0'} style={{ animationDelay: '300ms' }}>
             <div className="relative">
-              {/* Background image collage behind the phone */}
+              {/* Background gradient collage behind the phone */}
               <div className="absolute inset-0 -m-6 grid grid-cols-3 gap-2 opacity-20 dark:opacity-15 blur-[1px] rounded-3xl overflow-hidden">
-                {[1, 5, 9, 13, 17, 21, 25, 29, 33].map((n) => (
-                  <img
+                {[
+                  'linear-gradient(135deg, #1e293b, #475569)',
+                  'linear-gradient(175deg, #18181b, #d4a574)',
+                  'linear-gradient(160deg, #dc2626, #b91c1c)',
+                  'linear-gradient(160deg, #f97316, #ec4899)',
+                  'linear-gradient(135deg, #0ea5e9, #6366f1)',
+                  'linear-gradient(180deg, #0f172a, #22d3ee)',
+                  'linear-gradient(135deg, #7c3aed, #1e1b4b)',
+                  'linear-gradient(170deg, #064e3b, #86efac)',
+                  'linear-gradient(160deg, #1e3a5f, #0d9488)',
+                ].map((bg, n) => (
+                  <div
                     key={n}
-                    src={`/templates/${String(n).padStart(2, '0')}.png`}
-                    alt=""
-                    className="w-full h-24 object-cover rounded-lg"
-                    loading="lazy"
+                    className="w-full h-24 rounded-lg"
+                    style={{ background: bg }}
                   />
                 ))}
               </div>
@@ -157,15 +165,21 @@ export default function HeroSection() {
 
                 {/* Floating template previews — hidden on mobile to prevent overflow */}
                 <div className="hidden sm:block absolute -left-12 top-8 w-20 h-28 rounded-xl overflow-hidden border-2 border-background shadow-xl animate-float rotate-[-6deg]">
-                  <img src="/templates/03.png" alt="Template" className="w-full h-full object-cover" loading="lazy" />
+                  <div className="w-full h-full" style={{ background: 'linear-gradient(160deg, #f97316, #ec4899)' }}>
+                    <div className="p-2 pt-4 text-white text-[5px] font-bold leading-tight opacity-70">SUNSET<br/>PROMO</div>
+                  </div>
                 </div>
 
                 <div className="hidden sm:block absolute -right-10 top-32 w-20 h-28 rounded-xl overflow-hidden border-2 border-background shadow-xl animate-float delay-200 rotate-[4deg]">
-                  <img src="/templates/07.png" alt="Template" className="w-full h-full object-cover" loading="lazy" />
+                  <div className="w-full h-full" style={{ background: 'linear-gradient(180deg, #0f172a, #020617)' }}>
+                    <div className="p-2 pt-4 text-[5px] font-bold leading-tight" style={{ color: '#22d3ee', opacity: 0.7 }}>NEON<br/>NIGHT</div>
+                  </div>
                 </div>
 
                 <div className="hidden sm:block absolute -left-6 bottom-16 w-18 h-24 rounded-xl overflow-hidden border-2 border-background shadow-xl animate-float delay-400 rotate-[3deg]">
-                  <img src="/templates/15.png" alt="Template" className="w-full h-full object-cover" loading="lazy" />
+                  <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #7c3aed, #1e1b4b)' }}>
+                    <div className="p-2 pt-3 text-[5px] font-bold leading-tight" style={{ color: '#c4b5fd', opacity: 0.7 }}>ROYAL<br/>PURPLE</div>
+                  </div>
                 </div>
               </div>
             </div>

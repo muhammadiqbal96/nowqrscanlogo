@@ -19,6 +19,7 @@ const ANIMATION_OPTIONS = [
     { value: 'expand', label: 'Expand', desc: 'Scale up effect' },
     { value: 'bounce', label: 'Bounce', desc: 'Playful bounce' },
     { value: 'glow', label: 'Glow', desc: 'Ambient glow' },
+    { value: 'flash', label: 'Flash', desc: 'CTA flashes into QR' },
     { value: 'none', label: 'None', desc: 'Static display' },
 ]
 

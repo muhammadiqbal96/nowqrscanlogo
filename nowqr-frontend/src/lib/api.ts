@@ -143,6 +143,19 @@ export const aiApi = {
   }) => api.post('/ai/generate', data),
 };
 
+// ─── Template API ────────────────────────────────────────────────
+export const templateApi = {
+  generate: (data: {
+    campaign_id: number;
+    business_name: string;
+    business_description: string;
+    target_audience?: string;
+    cta_type: string;
+    category?: string;
+  }) => api.post('/templates/generate', data),
+  categories: () => api.get('/templates/categories'),
+};
+
 // ─── Analytics API ───────────────────────────────────────────────
 export const analyticsApi = {
   dashboard: () => api.get('/analytics/dashboard'),

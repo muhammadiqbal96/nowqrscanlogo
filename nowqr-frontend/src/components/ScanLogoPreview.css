@@ -133,3 +133,105 @@
 .scanlogo-anim-none {
     animation: none;
 }
+
+/* ─── Flash (ScanLogo ↔ QR code) ───────────────────────────── */
+/* Overlay flashes 3 times showing CTA text, then stays hidden to reveal QR */
+.scanlogo-anim-flash {
+    animation: none;
+}
+
+.scanlogo-flash-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--scanlogo-color, #c8401a);
+    border-radius: inherit;
+    z-index: 2;
+    animation: scanlogo-flash-sequence 4.5s ease-in-out forwards;
+    pointer-events: none;
+}
+
+.scanlogo-flash-overlay .flash-cta-text {
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    text-align: center;
+    line-height: 1.3;
+    padding: 4px 8px;
+    word-break: break-word;
+}
+
+/* Scale flash text to container size */
+.scanlogo-flash-overlay.flash-sm .flash-cta-text {
+    font-size: 8px;
+}
+
+.scanlogo-flash-overlay.flash-md .flash-cta-text {
+    font-size: 12px;
+}
+
+.scanlogo-flash-overlay.flash-lg .flash-cta-text {
+    font-size: 18px;
+}
+
+@keyframes scanlogo-flash-sequence {
+    0% {
+        opacity: 1;
+    }
+
+    /* ScanLogo CTA visible */
+    12% {
+        opacity: 1;
+    }
+
+    16% {
+        opacity: 0;
+    }
+
+    /* → QR shows */
+    28% {
+        opacity: 0;
+    }
+
+    32% {
+        opacity: 1;
+    }
+
+    /* → ScanLogo flash 1 */
+    44% {
+        opacity: 1;
+    }
+
+    48% {
+        opacity: 0;
+    }
+
+    /* → QR shows */
+    58% {
+        opacity: 0;
+    }
+
+    62% {
+        opacity: 1;
+    }
+
+    /* → ScanLogo flash 2 */
+    72% {
+        opacity: 1;
+    }
+
+    76% {
+        opacity: 0;
+    }
+
+    /* → QR (final) */
+    100% {
+        opacity: 0;
+    }
+
+    /* stays hidden = QR visible */
+}

@@ -1,9 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
     ArrowLeft, Download, Type, ImageIcon, QrCode, Square, Trash2,
     Loader2, Copy, Layers, ChevronUp, ChevronDown,
-    LayoutTemplate, Bold, Italic, Sparkles,
+    Bold, Italic, Sparkles,
     AlignLeft, AlignCenter, AlignRight, MousePointer, Lock, Unlock,
 } from 'lucide-react'
 import { toPng, toJpeg } from 'html-to-image'
@@ -59,8 +59,6 @@ const CANVAS_SIZES: Record<AspectRatio, { w: number; h: number; label: string }>
     '16:9': { w: 1920, h: 1080, label: 'Landscape' },
 }
 
-const TEMPLATE_COUNT = 46
-
 let nextId = 1
 function uid() { return `el_${nextId++}_${Date.now()}` }
 
@@ -68,6 +66,8 @@ function uid() { return `el_${nextId++}_${Date.now()}` }
 export default function FlyerEditorPage() {
     const { id } = useParams()
     const navigate = useNavigate()
+    const [searchParams] = useSearchParams()
+    const isFlyerMode = searchParams.get('type') === 'flyer'
     const { refreshUser } = useAuth()
     const canvasRef = useRef<HTMLDivElement>(null)
     const canvasWrapRef = useRef<HTMLDivElement>(null)
@@ -84,7 +84,6 @@ export default function FlyerEditorPage() {
     const [bgTemplate, setBgTemplate] = useState<number | null>(null)
     const [elements, setElements] = useState<FlyerElement[]>([])
     const [selectedId, setSelectedId] = useState<string | null>(null)
-    const [showTemplates, setShowTemplates] = useState(false)
     const [canvasScale, setCanvasScale] = useState(0.35)
 
     // Drag state
@@ -118,16 +117,40 @@ export default function FlyerEditorPage() {
                 setScanLogos(logosRes.data.data || [])
 
                 // Restore saved canvas state, or populate fresh from campaign data
-                const design = camp.page_design
-                if (design && design.elements && design.elements.length > 0) {
-                    setElements(design.elements)
-                    if (design.bgColor) setBgColor(design.bgColor)
-                    if (design.bgImage) setBgImage(design.bgImage)
-                    if (design.bgTemplate !== undefined) setBgTemplate(design.bgTemplate)
-                    if (design.aspectRatio) setAspectRatio(design.aspectRatio as AspectRatio)
-                    if (design.qrScanLogoMap) setQrScanLogoMap(design.qrScanLogoMap)
+                // In flyer mode, prefer sessionStorage canvas from template selection
+                const sessionKey = `flyer_canvas_${camp.id}`
+                const sessionCanvas = isFlyerMode ? sessionStorage.getItem(sessionKey) : null
+
+                if (sessionCanvas) {
+                    try {
+                        const parsed = JSON.parse(sessionCanvas)
+                        if (parsed.elements?.length) {
+                            setElements(parsed.elements)
+                            if (parsed.bgColor) setBgColor(parsed.bgColor)
+                            if (parsed.bgImage) setBgImage(parsed.bgImage)
+                            if (parsed.bgTemplate !== undefined) setBgTemplate(parsed.bgTemplate)
+                            if (parsed.aspectRatio) setAspectRatio(parsed.aspectRatio as AspectRatio)
+                            if (parsed.qrScanLogoMap) setQrScanLogoMap(parsed.qrScanLogoMap)
+                        } else {
+                            populateFromCampaign(camp)
+                        }
+                    } catch {
+                        populateFromCampaign(camp)
+                    }
+                    // Clean up sessionStorage after loading
+                    sessionStorage.removeItem(sessionKey)
                 } else {
-                    populateFromCampaign(camp)
+                    const design = camp.page_design
+                    if (!isFlyerMode && design && design.elements && design.elements.length > 0) {
+                        setElements(design.elements)
+                        if (design.bgColor) setBgColor(design.bgColor)
+                        if (design.bgImage) setBgImage(design.bgImage)
+                        if (design.bgTemplate !== undefined) setBgTemplate(design.bgTemplate)
+                        if (design.aspectRatio) setAspectRatio(design.aspectRatio as AspectRatio)
+                        if (design.qrScanLogoMap) setQrScanLogoMap(design.qrScanLogoMap)
+                    } else {
+                        populateFromCampaign(camp)
+                    }
                 }
             } catch {
                 toast.error('Failed to load campaign')
@@ -174,66 +197,108 @@ export default function FlyerEditorPage() {
     const populateFromCampaign = (camp: any) => {
         const color = camp.primary_color || '#c8401a'
         const font = camp.font_family || 'Inter'
+
+        // Create a gradient background from the primary color
+        setBgColor(`linear-gradient(160deg, ${color} 0%, #1e1b4b 100%)`)
+
         const els: FlyerElement[] = []
 
-        // Business name — lighter version of primary
+        // Top accent bar
         els.push({
-            id: uid(), type: 'text', x: 80, y: 120, width: 920, height: 60,
+            id: uid(), type: 'shape', x: 0, y: 0, width: 1080, height: 8,
+            rotation: 0, locked: true, bgColor: color, borderRadius: 0, opacity: 1,
+        })
+
+        // Decorative circle (top-right)
+        els.push({
+            id: uid(), type: 'shape', x: 680, y: 80, width: 340, height: 340,
+            rotation: 0, locked: true, bgColor: color, borderRadius: 170, opacity: 0.06,
+        })
+        els.push({
+            id: uid(), type: 'shape', x: 720, y: 120, width: 260, height: 260,
+            rotation: 0, locked: true, bgColor: color, borderRadius: 130, opacity: 0.04,
+        })
+
+        // Business name
+        els.push({
+            id: uid(), type: 'text', x: 80, y: 160, width: 500, height: 50,
             rotation: 0, locked: false,
             content: camp.business_name || 'Your Business',
-            fontSize: 24, fontFamily: font, fontWeight: '600',
-            textColor: '#dddddd', textAlign: 'center', fontStyle: 'normal',
+            fontSize: 18, fontFamily: font, fontWeight: '700',
+            textColor: color, textAlign: 'left', fontStyle: 'normal',
         })
-        // Headline — uses campaign primary color
+
+        // Headline
         els.push({
-            id: uid(), type: 'text', x: 60, y: 300, width: 960, height: 180,
+            id: uid(), type: 'text', x: 80, y: 320, width: 920, height: 220,
             rotation: 0, locked: false,
             content: camp.headline || 'Your Headline Here',
-            fontSize: 64, fontFamily: font, fontWeight: '800',
-            textColor: color, textAlign: 'center', fontStyle: 'normal',
+            fontSize: 68, fontFamily: font, fontWeight: '800',
+            textColor: '#ffffff', textAlign: 'left', fontStyle: 'normal',
         })
-        // Sub-headline — white
+
+        // Divider line
+        els.push({
+            id: uid(), type: 'shape', x: 80, y: 570, width: 80, height: 4,
+            rotation: 0, locked: true, bgColor: color, borderRadius: 2, opacity: 1,
+        })
+
+        // Sub-headline
         if (camp.sub_headline) {
             els.push({
-                id: uid(), type: 'text', x: 120, y: 510, width: 840, height: 80,
+                id: uid(), type: 'text', x: 80, y: 610, width: 800, height: 80,
                 rotation: 0, locked: false,
                 content: camp.sub_headline,
-                fontSize: 28, fontFamily: font, fontWeight: '400',
-                textColor: '#ffffff', textAlign: 'center', fontStyle: 'normal',
+                fontSize: 24, fontFamily: font, fontWeight: '400',
+                textColor: 'rgba(255,255,255,0.85)', textAlign: 'left', fontStyle: 'normal',
             })
         }
-        // Description — light gray
+
+        // Description
         if (camp.description) {
             els.push({
-                id: uid(), type: 'text', x: 120, y: 620, width: 840, height: 160,
+                id: uid(), type: 'text', x: 80, y: 730, width: 800, height: 180,
                 rotation: 0, locked: false,
                 content: camp.description,
                 fontSize: 20, fontFamily: font, fontWeight: '400',
-                textColor: '#bbbbbb', textAlign: 'center', fontStyle: 'normal',
+                textColor: 'rgba(255,255,255,0.7)', textAlign: 'left', fontStyle: 'normal',
             })
         }
-        // CTA text — primary color
-        if (camp.cta_button_text) {
-            els.push({
-                id: uid(), type: 'text', x: 280, y: 1500, width: 520, height: 50,
-                rotation: 0, locked: false,
-                content: camp.cta_button_text,
-                fontSize: 18, fontFamily: font, fontWeight: '800',
-                textColor: color, textAlign: 'center', fontStyle: 'normal',
-            })
-        }
+
         // QR placeholder
         els.push({
-            id: uid(), type: 'qr', x: 380, y: 1180, width: 320, height: 320,
+            id: uid(), type: 'qr', x: 80, y: 1100, width: 300, height: 300,
             rotation: 0, locked: false,
         })
+
+        // CTA button background + text
+        if (camp.cta_button_text) {
+            els.push({
+                id: uid(), type: 'shape', x: 80, y: 1500, width: 340, height: 70,
+                rotation: 0, locked: false, bgColor: color, borderRadius: 12, opacity: 1,
+            })
+            els.push({
+                id: uid(), type: 'text', x: 80, y: 1500, width: 340, height: 70,
+                rotation: 0, locked: false,
+                content: camp.cta_button_text,
+                fontSize: 20, fontFamily: font, fontWeight: '700',
+                textColor: '#ffffff', textAlign: 'center', fontStyle: 'normal',
+            })
+        }
+
+        // Bottom accent bar
+        els.push({
+            id: uid(), type: 'shape', x: 0, y: 1912, width: 1080, height: 8,
+            rotation: 0, locked: true, bgColor: color, borderRadius: 0, opacity: 1,
+        })
+
         // Powered by
         els.push({
-            id: uid(), type: 'text', x: 340, y: 1800, width: 400, height: 40,
+            id: uid(), type: 'text', x: 340, y: 1840, width: 400, height: 40,
             rotation: 0, locked: false,
             content: 'Powered by NowQR',
-            fontSize: 14, fontFamily: font, fontWeight: '400',
-            textColor: '#555555', textAlign: 'center', fontStyle: 'normal',
+            fontSize: 13, fontFamily: font, fontWeight: '400',
+            textColor: 'rgba(255,255,255,0.5)', textAlign: 'center', fontStyle: 'normal',
         })
 
         setElements(els)
@@ -403,12 +468,6 @@ export default function FlyerEditorPage() {
         e.target.value = ''
     }
 
-    const selectTemplate = (num: number) => {
-        setBgTemplate(num)
-        setBgImage(null)
-        setShowTemplates(false)
-    }
-
     /* ─── Regenerate AI content ──────────────────────────────── */
     const [regenerating, setRegenerating] = useState(false)
     const regenerateFromAI = async () => {
@@ -469,8 +528,8 @@ export default function FlyerEditorPage() {
             link.click()
             toast.success(`Flyer downloaded as ${format.toUpperCase()}!`)
 
-            // Also save canvas state to campaign for restoring later
-            if (campaign) {
+            // Save canvas state to campaign for restoring later (only in post mode)
+            if (campaign && !isFlyerMode) {
                 campaignApi.update(campaign.id, {
                     page_design: { elements, bgColor, bgImage, bgTemplate, aspectRatio, qrScanLogoMap },
                 }).catch(() => { /* silent */ })
@@ -491,34 +550,34 @@ export default function FlyerEditorPage() {
         await new Promise(r => setTimeout(r, 100))
 
         try {
-            const dataUrl = await toPng(canvasRef.current, {
-                width: canvasSize.w,
-                height: canvasSize.h,
-                style: { transform: 'none', width: `${canvasSize.w}px`, height: `${canvasSize.h}px` },
-                pixelRatio: 1,
-            })
+            if (isFlyerMode) {
+                // Flyer mode — export image and create a flyer record
+                const dataUrl = await toPng(canvasRef.current, {
+                    width: canvasSize.w,
+                    height: canvasSize.h,
+                    style: { transform: 'none', width: `${canvasSize.w}px`, height: `${canvasSize.h}px` },
+                    pixelRatio: 1,
+                })
+                const res = await fetch(dataUrl)
+                const blob = await res.blob()
+                const file = new File([blob], `flyer-${Date.now()}.png`, { type: 'image/png' })
 
-            // Convert data URL to Blob/File
-            const res = await fetch(dataUrl)
-            const blob = await res.blob()
-            const file = new File([blob], `flyer-${Date.now()}.png`, { type: 'image/png' })
-
-            const canvasState = JSON.stringify({ elements, bgColor, bgImage, bgTemplate, aspectRatio })
-
-            // Save canvas state to campaign's page_design for restoring later
-            await campaignApi.update(campaign.id, {
-                page_design: { elements, bgColor, bgImage, bgTemplate, aspectRatio, qrScanLogoMap },
-            })
-
-            await campaignApi.storeFlyer(campaign.id, {
-                title: `${campaign.name} — ${canvasSize.label}`,
-                image: file,
-                canvas_state: canvasState,
-            })
-            toast.success('Flyer saved to campaign!')
+                await campaignApi.storeFlyer(campaign.id, {
+                    title: `${campaign.name} — ${canvasSize.label}`,
+                    image: file,
+                    canvas_state: JSON.stringify({ elements, bgColor, bgImage, bgTemplate, aspectRatio }),
+                })
+                toast.success('Flyer saved to campaign!')
+            } else {
+                // Post mode — save canvas state to campaign's page_design
+                await campaignApi.update(campaign.id, {
+                    page_design: { elements, bgColor, bgImage, bgTemplate, aspectRatio, qrScanLogoMap },
+                })
+                toast.success('Design saved!')
+            }
         } catch (err) {
             console.error(err)
-            toast.error('Failed to save flyer')
+            toast.error('Failed to save')
         } finally {
             setSaving(false)
         }
@@ -590,7 +649,7 @@ export default function FlyerEditorPage() {
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50"
                     >
                         {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
-                        Save
+                        {isFlyerMode ? 'Save Flyer' : 'Save'}
                     </button>
 
                     {/* Export */}
@@ -653,8 +712,12 @@ export default function FlyerEditorPage() {
                         <div>
                             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Background</p>
                             <div className="space-y-2">
+                                {/* Current bg preview + color picker */}
                                 <div className="flex items-center gap-2">
-                                    <input type="color" value={bgColor} onChange={e => { setBgColor(e.target.value); setBgImage(null); setBgTemplate(null) }}
+                                    <div className="w-8 h-8 rounded border border-border shrink-0 overflow-hidden">
+                                        <div className="w-full h-full" style={{ background: bgImage ? `url(${bgImage}) center/cover` : bgColor }} />
+                                    </div>
+                                    <input type="color" value={bgColor.startsWith('#') ? bgColor : '#0a0a0a'} onChange={e => { setBgColor(e.target.value); setBgImage(null); setBgTemplate(null) }}
                                         className="w-8 h-8 rounded border border-border cursor-pointer shrink-0" />
                                     <span className="text-xs text-muted-foreground">Solid color</span>
                                 </div>
@@ -662,27 +725,8 @@ export default function FlyerEditorPage() {
                                     <ImageIcon className="w-3.5 h-3.5" /> Upload background
                                     <input type="file" accept="image/*" onChange={handleBgUpload} className="hidden" />
                                 </label>
-                                <button onClick={() => setShowTemplates(!showTemplates)} className="w-full flex items-center gap-2 px-3 py-2 border border-border rounded-lg hover:bg-muted/50 text-xs">
-                                    <LayoutTemplate className="w-3.5 h-3.5" /> {showTemplates ? 'Hide' : 'Browse'} Templates ({TEMPLATE_COUNT})
-                                </button>
                             </div>
                         </div>
-
-                        {/* Template grid */}
-                        {showTemplates && (
-                            <div className="grid grid-cols-3 gap-1.5 max-h-64 overflow-y-auto">
-                                {Array.from({ length: TEMPLATE_COUNT }, (_, i) => i + 1).map(num => (
-                                    <button
-                                        key={num}
-                                        onClick={() => selectTemplate(num)}
-                                        className={`rounded-lg overflow-hidden border-2 transition-all aspect-[3/4] ${bgTemplate === num ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-primary/50'}`}
-                                    >
-                                        <img src={`/templates/${String(num).padStart(2, '0')}.png`} alt={`Template ${num}`}
-                                            className="w-full h-full object-cover" loading="lazy" />
-                                    </button>
-                                ))}
-                            </div>
-                        )}
 
                         {/* Layers */}
                         <div>
@@ -729,11 +773,9 @@ export default function FlyerEditorPage() {
                                 height: canvasSize.h,
                                 transform: `scale(${canvasScale})`,
                                 transformOrigin: 'top left',
-                                background: bgTemplate
-                                    ? `url(/templates/${String(bgTemplate).padStart(2, '0')}.png) center/cover`
-                                    : bgImage
-                                        ? `url(${bgImage}) center/cover`
-                                        : bgColor,
+                                background: bgImage
+                                    ? `url(${bgImage}) center/cover`
+                                    : bgColor,
                             }}
                             onPointerMove={handlePointerMove}
                             onPointerUp={handlePointerUp}
@@ -781,7 +823,7 @@ export default function FlyerEditorPage() {
                                             />
                                         ) : (
                                             <div
-                                                className="w-full h-full overflow-hidden"
+                                                className="w-full h-full overflow-hidden flex items-center justify-center"
                                                 style={{
                                                     fontSize: el.fontSize,
                                                     fontFamily: el.fontFamily,

@@ -83,6 +83,10 @@ Route::middleware(['auth:sanctum', 'check.blocked'])->group(function () {
     // AI Content
     Route::post('/ai/generate', [AiContentController::class, 'generateAdCopy']);
 
+    // Templates
+    Route::post('/templates/generate', [\App\Http\Controllers\Api\TemplateController::class, 'generateTemplates']);
+    Route::get('/templates/categories', [\App\Http\Controllers\Api\TemplateController::class, 'categories']);
+
     // Analytics
     Route::get('/analytics/dashboard', [AnalyticsController::class, 'dashboard']);
     Route::get('/analytics/campaigns/{campaignId}', [AnalyticsController::class, 'campaign']);

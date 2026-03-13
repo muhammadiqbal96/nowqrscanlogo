@@ -7,11 +7,24 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
 gsap.registerPlugin(ScrollTrigger)
 
-const templates = Array.from({ length: 46 }, (_, i) => ({
-  id: i + 1,
-  src: `/templates/${String(i + 1).padStart(2, '0')}.png`,
-  alt: `NowQR Template ${i + 1}`,
-}))
+const templates = [
+  { id: 1, bg: '#ffffff', accent: '#1e293b', label: 'Modern Clean' },
+  { id: 2, bg: 'linear-gradient(175deg, #18181b, #09090b)', accent: '#d4a574', label: 'Dark Luxury' },
+  { id: 3, bg: '#dc2626', accent: '#ffffff', label: 'Bold Statement' },
+  { id: 4, bg: 'linear-gradient(160deg, #f97316, #ec4899)', accent: '#ffffff', label: 'Sunset Gradient' },
+  { id: 5, bg: '#f8fafc', accent: '#334155', label: 'Minimalist' },
+  { id: 6, bg: 'linear-gradient(135deg, #0ea5e9, #6366f1)', accent: '#ffffff', label: 'Ocean Breeze' },
+  { id: 7, bg: 'linear-gradient(180deg, #0f172a, #020617)', accent: '#22d3ee', label: 'Neon Night' },
+  { id: 8, bg: 'linear-gradient(170deg, #fef3c7, #d6d3d1)', accent: '#92400e', label: 'Warm Earth' },
+  { id: 9, bg: 'linear-gradient(180deg, #ecfdf5, #d1fae5)', accent: '#059669', label: 'Mint Fresh' },
+  { id: 10, bg: 'linear-gradient(135deg, #7c3aed, #4f46e5, #1e1b4b)', accent: '#c4b5fd', label: 'Royal Purple' },
+  { id: 11, bg: '#1c1917', accent: '#fbbf24', label: 'Coffee House' },
+  { id: 12, bg: 'linear-gradient(145deg, #fb7185, #f97316)', accent: '#ffffff', label: 'Coral Pop' },
+  { id: 13, bg: 'linear-gradient(170deg, #064e3b, #14532d)', accent: '#86efac', label: 'Forest Deep' },
+  { id: 14, bg: 'linear-gradient(135deg, #e9d5ff, #fce7f3, #fef9c3)', accent: '#7c3aed', label: 'Soft Pastel' },
+  { id: 15, bg: 'linear-gradient(160deg, #1e3a5f, #0d9488)', accent: '#2dd4bf', label: 'Tech Blue' },
+  { id: 16, bg: 'linear-gradient(135deg, #0ea5e9, #6366f1)', accent: '#ffffff', label: 'Ocean Breeze' },
+]
 
 const categories = [
   'Restaurant', 'Church', 'Salon', 'Nonprofit', 'Real Estate', 'Fitness',
@@ -178,19 +191,22 @@ export default function GallerySection() {
                   onClick={() => openLightbox(i)}
                 >
                   <div
-                    className="relative w-full h-full overflow-hidden bg-white group-hover:shadow-2xl group-hover:shadow-primary/15 transition-all duration-300"
+                    className="relative w-full h-full overflow-hidden group-hover:shadow-2xl group-hover:shadow-primary/15 transition-all duration-300"
                     style={{
                       borderRadius: '10px',
                       border: '3px solid white',
                       boxShadow: '0 4px 15px rgba(0,0,0,0.12)',
                     }}
                   >
-                    <img
-                      src={t.src}
-                      alt={t.alt}
-                      loading="lazy"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    />
+                    <div
+                      className="w-full h-full group-hover:scale-105 transition-transform duration-700 flex flex-col items-center justify-center"
+                      style={{ background: t.bg }}
+                    >
+                      <div className="text-center px-2">
+                        <div className="font-bold text-[8px] sm:text-[10px] lg:text-sm leading-tight" style={{ color: t.accent }}>{t.label}</div>
+                        <div className="mt-1 w-8 h-0.5 mx-auto rounded" style={{ backgroundColor: t.accent, opacity: 0.4 }} />
+                      </div>
+                    </div>
                     <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 sm:p-3">
                       <span className="text-white font-semibold text-[9px] sm:text-xs lg:text-sm">{categories[i]}</span>
                       <span className="text-white/70 text-[7px] sm:text-[10px] lg:text-xs">#{t.id}</span>
@@ -228,11 +244,18 @@ export default function GallerySection() {
             </button>
 
             <div className="bg-card overflow-hidden shadow-2xl border border-border" style={{ borderRadius: '12px' }}>
-              <img
-                src={templates[currentIndex].src}
-                alt={templates[currentIndex].alt}
-                className="w-full h-auto max-h-[80vh] object-contain"
-              />
+              <div
+                className="w-full flex items-center justify-center"
+                style={{ background: templates[currentIndex].bg, height: '70vh' }}
+              >
+                <div className="text-center px-8">
+                  <div className="font-bold text-3xl mb-3" style={{ color: templates[currentIndex].accent }}>
+                    {templates[currentIndex].label}
+                  </div>
+                  <div className="w-24 h-1 mx-auto rounded" style={{ backgroundColor: templates[currentIndex].accent, opacity: 0.4 }} />
+                  <p className="mt-4 text-sm" style={{ color: templates[currentIndex].accent, opacity: 0.6 }}>Template Preview</p>
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center justify-between mt-4">

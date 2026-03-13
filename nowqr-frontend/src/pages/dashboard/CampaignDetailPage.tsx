@@ -155,7 +155,7 @@ export default function CampaignDetailPage() {
                                 <Globe className="w-3.5 h-3.5" /> View Live
                             </a>
                         )}
-                        <Link to={`/dashboard/campaigns/${campaign.id}/flyer`}
+                        <Link to={`/dashboard/campaigns/${campaign.id}/templates?type=flyer`}
                             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/25">
                             <Plus className="w-3.5 h-3.5" /> Create Flyer
                         </Link>
@@ -187,35 +187,110 @@ export default function CampaignDetailPage() {
                     </div>
                 </div>
 
-                {campaign.headline ? (
+                {campaign.page_design?.elements?.length > 0 ? (
+                    /* ─── Render actual canvas design from page_design ─── */
+                    (() => {
+                        const pd = campaign.page_design
+                        const cw = 1080
+                        const ch = pd.aspectRatio === '1:1' ? 1080 : pd.aspectRatio === '4:5' ? 1350 : 1920
+                        const maxW = 480
+                        const scale = maxW / cw
+                        const displayH = ch * scale
+                        return (
+                            <div className="flex justify-center">
+                                <div ref={postRef} className="rounded-2xl overflow-hidden shadow-lg border border-border" style={{ width: maxW, height: displayH }}>
+                                    <div className="relative origin-top-left" style={{
+                                        width: cw,
+                                        height: ch,
+                                        transform: `scale(${scale})`,
+                                        background: pd.bgImage ? `url(${pd.bgImage}) center/cover` : (pd.bgColor || '#1a1a2e'),
+                                    }}>
+                                        {pd.elements.map((el: any) => (
+                                            <div key={el.id} className="absolute" style={{
+                                                left: el.x,
+                                                top: el.y,
+                                                width: el.width,
+                                                height: el.height,
+                                                transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                                            }}>
+                                                {el.type === 'text' && (
+                                                    <div className="w-full h-full overflow-hidden flex items-center justify-center" style={{
+                                                        fontSize: el.fontSize,
+                                                        fontFamily: el.fontFamily,
+                                                        fontWeight: el.fontWeight as any,
+                                                        fontStyle: el.fontStyle,
+                                                        color: el.textColor,
+                                                        textAlign: el.textAlign as any,
+                                                        lineHeight: 1.3,
+                                                        wordBreak: 'break-word',
+                                                    }}>
+                                                        {el.content}
+                                                    </div>
+                                                )}
+                                                {el.type === 'shape' && (
+                                                    <div className="w-full h-full" style={{
+                                                        backgroundColor: el.bgColor || '#c8401a',
+                                                        borderRadius: el.borderRadius || 0,
+                                                        opacity: el.opacity ?? 1,
+                                                        border: el.borderWidth ? `${el.borderWidth}px solid ${el.borderColor || '#fff'}` : undefined,
+                                                    }} />
+                                                )}
+                                                {el.type === 'image' && (
+                                                    <img src={el.src} alt="" className="w-full h-full pointer-events-none"
+                                                        style={{ objectFit: (el.objectFit || 'cover') as any, borderRadius: el.borderRadius || 0 }} />
+                                                )}
+                                                {el.type === 'qr' && (
+                                                    <div className="w-full h-full flex items-center justify-center">
+                                                        <ScanLogoPreview
+                                                            url={'https://nowqr.com'}
+                                                            shortUrl={scanLogos[0]?.short_url}
+                                                            shape={scanLogos[0]?.shape || 'shield'}
+                                                            animation="none"
+                                                            color={scanLogos[0]?.color || primaryColor}
+                                                            ctaText={scanLogos[0]?.cta_text || campaign.cta_button_text || 'SCAN'}
+                                                            safeScanBadge={false}
+                                                            centerLogoUrl={scanLogos[0]?.center_logo_path ? `/storage/${scanLogos[0].center_logo_path}` : null}
+                                                            size={Math.min(el.width, el.height) - 20}
+                                                            minimal
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })()
+                ) : campaign.headline ? (
                     <div className="flex justify-center">
                         <div ref={postRef} className="bg-card border border-border rounded-2xl overflow-hidden shadow-lg w-full" style={{ fontFamily, maxWidth: 672 }}>
                             <div className="flex flex-col items-center justify-between px-10 py-10 text-center relative min-h-[500px]"
-                                style={{ background: `linear-gradient(135deg, ${primaryColor}15, ${primaryColor}05)` }}>
+                                style={{ background: `linear-gradient(160deg, ${primaryColor}, ${primaryColor}cc 60%, #1e1b4b)` }}>
 
                                 {/* Top decorative line */}
-                                <div className="w-12 h-1 rounded-full mb-6" style={{ backgroundColor: primaryColor }} />
+                                <div className="w-12 h-1 rounded-full mb-6" style={{ backgroundColor: '#ffffff50' }} />
 
                                 {/* Business badge */}
                                 <div className="mb-6">
                                     <span className="text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full"
-                                        style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
+                                        style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#ffffff' }}>
                                         {campaign.business_name}
                                     </span>
                                 </div>
 
-                                <h2 className="text-3xl font-bold mb-3 leading-tight max-w-lg" style={{ color: primaryColor }}>
+                                <h2 className="text-3xl font-bold mb-3 leading-tight max-w-lg" style={{ color: '#ffffff' }}>
                                     {campaign.headline}
                                 </h2>
 
                                 {campaign.sub_headline && (
-                                    <p className="text-base text-muted-foreground mb-4 max-w-md">
+                                    <p className="text-base mb-4 max-w-md" style={{ color: 'rgba(255,255,255,0.8)' }}>
                                         {campaign.sub_headline}
                                     </p>
                                 )}
 
                                 {campaign.description && (
-                                    <p className="text-sm text-muted-foreground/80 mb-8 max-w-lg leading-relaxed">
+                                    <p className="text-sm mb-8 max-w-lg leading-relaxed" style={{ color: 'rgba(255,255,255,0.6)' }}>
                                         {campaign.description}
                                     </p>
                                 )}
@@ -228,7 +303,7 @@ export default function CampaignDetailPage() {
                                             shortUrl={scanLogos[0].short_url}
                                             shape={scanLogos[0].shape || 'shield'}
                                             animation="none"
-                                            color={scanLogos[0].color || primaryColor}
+                                            color={scanLogos[0].color || '#ffffff'}
                                             ctaText={scanLogos[0].cta_text || campaign.cta_button_text || 'SCAN'}
                                             safeScanBadge={false}
                                             centerLogoUrl={scanLogos[0].center_logo_path ? `/storage/${scanLogos[0].center_logo_path}` : null}
@@ -238,25 +313,25 @@ export default function CampaignDetailPage() {
                                     </div>
                                 ) : (
                                     <div className="w-28 h-28 rounded-2xl border-2 border-dashed flex items-center justify-center mb-4"
-                                        style={{ borderColor: primaryColor }}>
+                                        style={{ borderColor: 'rgba(255,255,255,0.4)' }}>
                                         <div className="text-center">
                                             <div className="w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-1"
-                                                style={{ backgroundColor: `${primaryColor}20` }}>
-                                                <QrCode className="w-6 h-6" style={{ color: primaryColor }} />
+                                                style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
+                                                <QrCode className="w-6 h-6" style={{ color: '#ffffff' }} />
                                             </div>
-                                            <span className="text-[10px] text-muted-foreground">ScanLogo</span>
+                                            <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>ScanLogo</span>
                                         </div>
                                     </div>
                                 )}
 
                                 {/* CTA button */}
                                 <div className="px-8 py-2.5 rounded-full font-bold text-sm uppercase tracking-wider"
-                                    style={{ backgroundColor: primaryColor, color: '#ffffff' }}>
+                                    style={{ backgroundColor: '#ffffff', color: primaryColor }}>
                                     {campaign.cta_button_text}
                                 </div>
 
                                 {/* Bottom decorative line */}
-                                <div className="w-12 h-1 rounded-full mt-6" style={{ backgroundColor: `${primaryColor}30` }} />
+                                <div className="w-12 h-1 rounded-full mt-6" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }} />
                             </div>
                         </div>
                     </div>
@@ -267,7 +342,7 @@ export default function CampaignDetailPage() {
                         </div>
                         <p className="text-sm font-medium mb-1">No content yet</p>
                         <p className="text-xs text-muted-foreground mb-4">Create your first post using the canvas editor.</p>
-                        <Link to={`/dashboard/campaigns/${campaign.id}/flyer`}
+                        <Link to={`/dashboard/campaigns/${campaign.id}/templates`}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90">
                             <Plus className="w-4 h-4" /> Create Post
                         </Link>
@@ -371,7 +446,7 @@ export default function CampaignDetailPage() {
                 <div className="bg-card border border-border rounded-2xl p-5">
                     <h3 className="text-sm font-bold mb-4">Quick Actions</h3>
                     <div className="space-y-2">
-                        <Link to={`/dashboard/campaigns/${campaign.id}/flyer`}
+                        <Link to={`/dashboard/campaigns/${campaign.id}/templates?type=flyer`}
                             className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/50 transition-colors w-full">
                             <div className="w-9 h-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
                                 <FileImage className="w-4 h-4 text-purple-500" />
@@ -414,7 +489,7 @@ export default function CampaignDetailPage() {
                             Additional promotional materials for this campaign ({flyers.length})
                         </p>
                     </div>
-                    <Link to={`/dashboard/campaigns/${campaign.id}/flyer`}
+                    <Link to={`/dashboard/campaigns/${campaign.id}/templates`}
                         className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90">
                         <Plus className="w-3.5 h-3.5" /> New Flyer
                     </Link>
@@ -424,13 +499,57 @@ export default function CampaignDetailPage() {
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         {flyers.map((flyer: any) => (
                             <div key={flyer.id} className="bg-card border border-border rounded-2xl overflow-hidden group hover:shadow-lg transition-all">
-                                {flyer.image_path && (
+                                {flyer.image_path ? (
                                     <div className="aspect-[3/4] bg-muted">
                                         <img
                                             src={`/storage/${flyer.image_path}`}
                                             alt={flyer.title}
                                             className="w-full h-full object-cover"
                                         />
+                                    </div>
+                                ) : flyer.canvas_state?.elements?.length > 0 ? (
+                                    /* Mini canvas preview from canvas_state */
+                                    (() => {
+                                        const cs = flyer.canvas_state
+                                        const fw = 1080
+                                        const fh = cs.aspectRatio === '1:1' ? 1080 : cs.aspectRatio === '4:5' ? 1350 : 1920
+                                        return (
+                                            <div className="aspect-[3/4] bg-muted overflow-hidden">
+                                                <div className="relative origin-top-left" style={{
+                                                    width: fw,
+                                                    height: fh,
+                                                    transform: `scale(${200 / fw})`,
+                                                    background: cs.bgImage ? `url(${cs.bgImage}) center/cover` : (cs.bgColor || '#1a1a2e'),
+                                                }}>
+                                                    {cs.elements.map((el: any) => (
+                                                        <div key={el.id} className="absolute" style={{
+                                                            left: el.x, top: el.y,
+                                                            width: el.width, height: el.height,
+                                                            transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                                                        }}>
+                                                            {el.type === 'text' && (
+                                                                <div className="w-full h-full overflow-hidden" style={{
+                                                                    fontSize: el.fontSize, fontFamily: el.fontFamily,
+                                                                    fontWeight: el.fontWeight as any, color: el.textColor,
+                                                                    textAlign: el.textAlign as any, lineHeight: 1.3,
+                                                                }}>{el.content}</div>
+                                                            )}
+                                                            {el.type === 'shape' && (
+                                                                <div className="w-full h-full" style={{
+                                                                    backgroundColor: el.bgColor || '#c8401a',
+                                                                    borderRadius: el.borderRadius || 0,
+                                                                    opacity: el.opacity ?? 1,
+                                                                }} />
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )
+                                    })()
+                                ) : (
+                                    <div className="aspect-[3/4] bg-muted flex items-center justify-center">
+                                        <FileImage className="w-8 h-8 text-muted-foreground/30" />
                                     </div>
                                 )}
                                 <div className="p-3 flex items-center justify-between">
@@ -466,7 +585,7 @@ export default function CampaignDetailPage() {
                         <p className="text-xs text-muted-foreground mb-4">
                             Create flyers with the drag & drop editor to promote this campaign.
                         </p>
-                        <Link to={`/dashboard/campaigns/${campaign.id}/flyer`}
+                        <Link to={`/dashboard/campaigns/${campaign.id}/templates?type=flyer`}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90">
                             <Plus className="w-4 h-4" /> Create Flyer
                         </Link>

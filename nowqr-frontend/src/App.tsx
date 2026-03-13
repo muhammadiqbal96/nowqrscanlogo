@@ -27,6 +27,7 @@ import AnalyticsDashboardPage from '@/pages/dashboard/AnalyticsDashboardPage'
 import SettingsPage from '@/pages/dashboard/SettingsPage'
 import CreditsPage from '@/pages/dashboard/CreditsPage'
 import FlyerEditorPage from '@/pages/dashboard/FlyerEditorPage'
+import TemplateSelectionPage from '@/pages/dashboard/TemplateSelectionPage'
 import CampaignPublicPage from '@/pages/CampaignPublicPage'
 import BlogListPage from '@/pages/BlogListPage'
 import BlogDetailPage from '@/pages/BlogDetailPage'
@@ -99,6 +100,7 @@ function App() {
               <Route path="campaigns" element={<CampaignsListPage />} />
               <Route path="campaigns/new" element={<CampaignBuilderPage />} />
               <Route path="campaigns/:id" element={<CampaignDetailPage />} />
+              <Route path="campaigns/:id/templates" element={<TemplateSelectionPage />} />
               <Route path="campaigns/:id/flyer" element={<FlyerEditorPage />} />
               <Route path="scanlogos" element={<ScanLogosListPage />} />
               <Route path="scanlogos/new" element={<ScanLogoBuilderPage />} />

@@ -143,6 +143,8 @@ export default function CampaignPublicPage() {
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 cursor: 'pointer',
+                                position: 'relative',
+                                overflow: 'hidden',
                                 '--scanlogo-color': scanLogo.color,
                                 '--scanlogo-glow-color': `${scanLogo.color}66`,
                             } as React.CSSProperties}
@@ -165,6 +167,13 @@ export default function CampaignPublicPage() {
                                 logoPaddingStyle="circle"
                                 logoPadding={3}
                             />
+
+                            {/* Flash overlay: CTA text flashes 3 times then reveals QR */}
+                            {scanLogo.animation === 'flash' && (
+                                <div className="scanlogo-flash-overlay flash-lg">
+                                    <span className="flash-cta-text">{scanLogo.cta_text || campaign.cta_button_text || 'TAP TO SCAN'}</span>
+                                </div>
+                            )}
                         </div>
                     </a>
 

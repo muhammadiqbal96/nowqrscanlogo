@@ -82,6 +82,8 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                     transform: isDiamond ? 'rotate(45deg)' : undefined,
                     '--scanlogo-color': color,
                     '--scanlogo-glow-color': `${color}66`,
+                    position: 'relative',
+                    overflow: 'hidden',
                 } as React.CSSProperties}
             >
                 <div style={{ transform: isDiamond ? 'rotate(-45deg)' : undefined }}>
@@ -107,6 +109,13 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                         logoPadding={2}
                     />
                 </div>
+
+                {/* Flash overlay: shows CTA text, flashes 3 times, then reveals QR */}
+                {animation === 'flash' && (
+                    <div className={`scanlogo-flash-overlay ${size <= 60 ? 'flash-sm' : size <= 120 ? 'flash-md' : 'flash-lg'}`}>
+                        <span className="flash-cta-text">{ctaText}</span>
+                    </div>
+                )}
             </div>
 
             {/* CTA Text */}
