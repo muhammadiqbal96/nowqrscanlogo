@@ -43,16 +43,17 @@ export default function CreditsPage() {
         loadTransactions()
     }, [])
 
-    // Handle Stripe redirect back
+    // Handle PayPal redirect back
     useEffect(() => {
-        const sessionId = searchParams.get('session_id')
+        const orderId = searchParams.get('token') || searchParams.get('session_id')
+        const paypalSuccess = searchParams.get('paypal_success')
         const cancelled = searchParams.get('cancelled')
 
         if (cancelled) {
             toast.error('Payment cancelled')
             setSearchParams({})
-        } else if (sessionId) {
-            verifyPayment(sessionId)
+        } else if (paypalSuccess && orderId) {
+            verifyPayment(orderId)
         }
     }, [])
 
@@ -90,7 +91,7 @@ export default function CreditsPage() {
         setPurchasing(plan)
         try {
             const res = await creditsApi.purchasePlan(plan)
-            // Redirect to Stripe Checkout
+            // Redirect to PayPal approval page
             window.location.href = res.data.checkout_url
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Failed to start checkout')
@@ -102,7 +103,7 @@ export default function CreditsPage() {
         setPurchasing('topup')
         try {
             const res = await creditsApi.topUp(100)
-            // Redirect to Stripe Checkout
+            // Redirect to PayPal approval page
             window.location.href = res.data.checkout_url
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Failed to start checkout')

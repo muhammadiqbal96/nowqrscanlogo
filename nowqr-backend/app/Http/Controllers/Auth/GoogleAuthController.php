@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Mail\WelcomeSignupMail;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Mail;
 use Laravel\Socialite\Facades\Socialite;
 
 class GoogleAuthController extends Controller
@@ -69,6 +69,20 @@ class GoogleAuthController extends Controller
 
                 // Give signup bonus
                 $user->addCredits(10, 'signup_bonus', 'Welcome bonus credits');
+
+                try {
+                    Mail::to($user->email)->send(new WelcomeSignupMail($user));
+                } catch (\Throwable $e) {
+                    Log::error('Failed to send Google signup welcome email', [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            if ($user->is_blocked) {
+                $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+                return redirect("{$frontendUrl}/login?error=account_blocked");
             }
 
             $token = $user->createToken('auth-token')->plainTextToken;

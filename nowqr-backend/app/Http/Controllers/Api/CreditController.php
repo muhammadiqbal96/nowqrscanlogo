@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Mail\PurchaseReceiptMail;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Stripe\Checkout\Session as StripeSession;
-use Stripe\Stripe;
-use Stripe\Webhook;
+use Illuminate\Support\Facades\Mail;
 
 class CreditController extends Controller
 {
@@ -40,7 +41,7 @@ class CreditController extends Controller
     }
 
     /**
-     * Create a Stripe Checkout session for a plan purchase.
+     * Create a PayPal order for a plan purchase.
      */
     public function purchasePlan(Request $request): JsonResponse
     {
@@ -56,43 +57,33 @@ class CreditController extends Controller
             return response()->json(['message' => 'Invalid plan'], 422);
         }
 
-        Stripe::setApiKey(config('services.stripe.secret'));
+        $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
 
-        $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
-
-        $session = StripeSession::create([
-            'payment_method_types' => ['card'],
-            'line_items' => [[
-                'price_data' => [
-                    'currency' => 'usd',
-                    'product_data' => [
-                        'name' => $planDetails['name'],
-                        'description' => "{$planDetails['credits']} credits for NowQR",
-                    ],
-                    'unit_amount' => $planDetails['price'] * 100, // cents
-                ],
-                'quantity' => 1,
-            ]],
-            'mode' => 'payment',
-            'success_url' => "{$frontendUrl}/dashboard/credits?session_id={CHECKOUT_SESSION_ID}",
-            'cancel_url' => "{$frontendUrl}/dashboard/credits?cancelled=1",
-            'client_reference_id' => (string) $user->id,
-            'metadata' => [
-                'user_id' => $user->id,
-                'plan' => $plan,
-                'credits' => $planDetails['credits'],
-                'type' => 'plan_purchase',
-            ],
-        ]);
+        try {
+            $order = $this->createPaypalOrder(
+                userId: (int) $user->id,
+                type: 'plan_purchase',
+                credits: (int) $planDetails['credits'],
+                plan: (string) $plan,
+                amountUsd: (float) $planDetails['price'],
+                description: "{$planDetails['name']} ({$planDetails['credits']} credits)",
+                returnUrl: "{$frontendUrl}/dashboard/credits?paypal_success=1",
+                cancelUrl: "{$frontendUrl}/dashboard/credits?cancelled=1",
+            );
+        } catch (\Throwable $e) {
+            Log::error('PayPal order creation failed for plan purchase', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Failed to start PayPal checkout'], 500);
+        }
 
         return response()->json([
-            'checkout_url' => $session->url,
-            'session_id' => $session->id,
+            'checkout_url' => $order['approve_url'],
+            'session_id' => $order['id'],
+            'provider' => 'paypal',
         ]);
     }
 
     /**
-     * Create a Stripe Checkout session for a credit top-up.
+     * Create a PayPal order for a credit top-up.
      */
     public function topUp(Request $request): JsonResponse
     {
@@ -104,44 +95,34 @@ class CreditController extends Controller
         $credits = (int) $request->input('credits');
 
         // Price: $10 per 100 credits
-        $priceInCents = (int) (($credits / 100) * 10 * 100);
+        $amountUsd = round(($credits / 100) * 10, 2);
+        $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
 
-        Stripe::setApiKey(config('services.stripe.secret'));
-
-        $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
-
-        $session = StripeSession::create([
-            'payment_method_types' => ['card'],
-            'line_items' => [[
-                'price_data' => [
-                    'currency' => 'usd',
-                    'product_data' => [
-                        'name' => "NowQR Credit Top-Up",
-                        'description' => "{$credits} credits",
-                    ],
-                    'unit_amount' => $priceInCents,
-                ],
-                'quantity' => 1,
-            ]],
-            'mode' => 'payment',
-            'success_url' => "{$frontendUrl}/dashboard/credits?session_id={CHECKOUT_SESSION_ID}",
-            'cancel_url' => "{$frontendUrl}/dashboard/credits?cancelled=1",
-            'client_reference_id' => (string) $user->id,
-            'metadata' => [
-                'user_id' => $user->id,
-                'credits' => $credits,
-                'type' => 'top_up',
-            ],
-        ]);
+        try {
+            $order = $this->createPaypalOrder(
+                userId: (int) $user->id,
+                type: 'top_up',
+                credits: $credits,
+                plan: '-',
+                amountUsd: $amountUsd,
+                description: "NowQR Credit Top-Up ({$credits} credits)",
+                returnUrl: "{$frontendUrl}/dashboard/credits?paypal_success=1",
+                cancelUrl: "{$frontendUrl}/dashboard/credits?cancelled=1",
+            );
+        } catch (\Throwable $e) {
+            Log::error('PayPal order creation failed for top-up', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Failed to start PayPal checkout'], 500);
+        }
 
         return response()->json([
-            'checkout_url' => $session->url,
-            'session_id' => $session->id,
+            'checkout_url' => $order['approve_url'],
+            'session_id' => $order['id'],
+            'provider' => 'paypal',
         ]);
     }
 
     /**
-     * Verify a completed Stripe Checkout session and fulfill credits.
+     * Verify a completed PayPal order and fulfill credits.
      */
     public function verifySession(Request $request): JsonResponse
     {
@@ -151,18 +132,12 @@ class CreditController extends Controller
 
         $user = $request->user();
 
-        Stripe::setApiKey(config('services.stripe.secret'));
-
         try {
-            $session = StripeSession::retrieve($request->input('session_id'));
-
-            if ($session->payment_status !== 'paid') {
-                return response()->json(['message' => 'Payment not completed'], 400);
-            }
+            $orderId = $request->input('session_id');
 
             // Prevent double-fulfillment
             $existingTx = $user->creditTransactions()
-                ->where('metadata->stripe_session_id', $session->id)
+                ->where('payment_id', $orderId)
                 ->first();
 
             if ($existingTx) {
@@ -173,10 +148,27 @@ class CreditController extends Controller
                 ]);
             }
 
-            $meta = $session->metadata->toArray();
-            $type = $meta['type'] ?? 'plan_purchase';
-            $credits = (int) ($meta['credits'] ?? 0);
-            $plan = $meta['plan'] ?? null;
+            $capture = $this->capturePaypalOrder($orderId);
+
+            $customId = $capture['purchase_units'][0]['custom_id'] ?? null;
+            if (!$customId) {
+                return response()->json(['message' => 'Unable to validate payment metadata'], 422);
+            }
+
+            [$prefix, $orderUserId, $type, $creditsRaw, $planRaw] = array_pad(explode('|', $customId), 5, null);
+            if ($prefix !== 'nowqr' || (int) $orderUserId !== (int) $user->id) {
+                return response()->json(['message' => 'Payment does not belong to this user'], 403);
+            }
+
+            $credits = (int) $creditsRaw;
+            $plan = ($planRaw && $planRaw !== '-') ? $planRaw : null;
+            if ($credits <= 0) {
+                return response()->json(['message' => 'Invalid credit payload from payment provider'], 422);
+            }
+
+            $captureAmount = (float) (($capture['purchase_units'][0]['payments']['captures'][0]['amount']['value'] ?? 0));
+            $captureCurrency = strtoupper((string) ($capture['purchase_units'][0]['payments']['captures'][0]['amount']['currency_code'] ?? 'USD'));
+            $captureId = $capture['purchase_units'][0]['payments']['captures'][0]['id'] ?? $orderId;
 
             if ($type === 'plan_purchase' && $plan) {
                 $user->update(['plan' => $plan]);
@@ -186,11 +178,20 @@ class CreditController extends Controller
                     'purchase',
                     "Purchased {$planDetails['name']} plan",
                     [
-                        'provider' => 'stripe',
-                        'stripe_session_id' => $session->id,
-                        'amount' => $session->amount_total / 100,
-                        'currency' => 'USD',
+                        'provider' => 'paypal',
+                        'payment_id' => $orderId,
+                        'amount' => $captureAmount,
+                        'currency' => $captureCurrency,
                     ]
+                );
+
+                $this->sendPurchaseReceipt(
+                    $user,
+                    "{$planDetails['name']} plan",
+                    $credits,
+                    $captureAmount,
+                    $captureCurrency,
+                    $captureId,
                 );
             } else {
                 $user->addCredits(
@@ -198,11 +199,20 @@ class CreditController extends Controller
                     'purchase',
                     "Credit top-up: {$credits} credits",
                     [
-                        'provider' => 'stripe',
-                        'stripe_session_id' => $session->id,
-                        'amount' => $session->amount_total / 100,
-                        'currency' => 'USD',
+                        'provider' => 'paypal',
+                        'payment_id' => $orderId,
+                        'amount' => $captureAmount,
+                        'currency' => $captureCurrency,
                     ]
+                );
+
+                $this->sendPurchaseReceipt(
+                    $user,
+                    'Credit top-up',
+                    $credits,
+                    $captureAmount,
+                    $captureCurrency,
+                    $captureId,
                 );
             }
 
@@ -211,74 +221,150 @@ class CreditController extends Controller
                 'credits' => $user->fresh()->credits,
                 'plan' => $user->fresh()->plan,
             ]);
-        } catch (\Exception $e) {
-            Log::error('Stripe session verification failed', ['error' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            Log::error('PayPal payment verification failed', ['error' => $e->getMessage()]);
             return response()->json(['message' => 'Payment verification failed'], 500);
         }
     }
 
     /**
-     * Handle Stripe webhook events (backup fulfillment).
+     * Payment webhook endpoint placeholder.
      */
-    public function stripeWebhook(Request $request): JsonResponse
+    public function paypalWebhook(Request $request): JsonResponse
     {
-        $webhookSecret = config('services.stripe.webhook_secret');
-        $payload = $request->getContent();
-        $sigHeader = $request->header('Stripe-Signature');
+        return response()->json([
+            'status' => 'ignored',
+            'message' => 'Webhook is currently not required. PayPal flow uses order capture verification after redirect.',
+        ]);
+    }
 
-        try {
-            $event = Webhook::constructEvent($payload, $sigHeader, $webhookSecret);
-        } catch (\Exception $e) {
-            Log::error('Stripe webhook signature failed', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Invalid signature'], 400);
+    private function createPaypalOrder(
+        int $userId,
+        string $type,
+        int $credits,
+        string $plan,
+        float $amountUsd,
+        string $description,
+        string $returnUrl,
+        string $cancelUrl,
+    ): array {
+        $token = $this->getPaypalAccessToken();
+        $baseUrl = $this->getPaypalBaseUrl();
+
+        $customId = implode('|', ['nowqr', $userId, $type, $credits, $plan ?: '-']);
+
+        $response = $this->paypalHttp()->withToken($token)
+            ->acceptJson()
+            ->post("{$baseUrl}/v2/checkout/orders", [
+                'intent' => 'CAPTURE',
+                'purchase_units' => [[
+                    'description' => $description,
+                    'custom_id' => $customId,
+                    'amount' => [
+                        'currency_code' => 'USD',
+                        'value' => number_format($amountUsd, 2, '.', ''),
+                    ],
+                ]],
+                'application_context' => [
+                    'brand_name' => 'NowQR',
+                    'user_action' => 'PAY_NOW',
+                    'shipping_preference' => 'NO_SHIPPING',
+                    'return_url' => $returnUrl,
+                    'cancel_url' => $cancelUrl,
+                ],
+            ]);
+
+        if (!$response->successful()) {
+            throw new \RuntimeException('PayPal create order failed: ' . $response->body());
         }
 
-        if ($event->type === 'checkout.session.completed') {
-            $session = $event->data->object;
+        $payload = $response->json();
+        $approveUrl = collect($payload['links'] ?? [])->firstWhere('rel', 'approve')['href'] ?? null;
+        if (!$approveUrl) {
+            throw new \RuntimeException('PayPal order response missing approval URL');
+        }
 
-            if ($session->payment_status === 'paid') {
-                $userId = $session->metadata->user_id ?? null;
-                $credits = (int) ($session->metadata->credits ?? 0);
-                $type = $session->metadata->type ?? 'plan_purchase';
-                $plan = $session->metadata->plan ?? null;
+        return [
+            'id' => $payload['id'],
+            'approve_url' => $approveUrl,
+        ];
+    }
 
-                if (!$userId || !$credits) {
-                    return response()->json(['status' => 'skipped']);
-                }
+    private function capturePaypalOrder(string $orderId): array
+    {
+        $token = $this->getPaypalAccessToken();
+        $baseUrl = $this->getPaypalBaseUrl();
 
-                $user = \App\Models\User::find($userId);
-                if (!$user) {
-                    return response()->json(['error' => 'User not found'], 404);
-                }
+        $captureResponse = $this->paypalHttp()->withToken($token)
+            ->acceptJson()
+            ->post("{$baseUrl}/v2/checkout/orders/{$orderId}/capture", []);
 
-                // Prevent double-fulfillment
-                $existing = $user->creditTransactions()
-                    ->where('metadata->stripe_session_id', $session->id)
-                    ->first();
+        if ($captureResponse->successful()) {
+            return $captureResponse->json();
+        }
 
-                if ($existing) {
-                    return response()->json(['status' => 'already_fulfilled']);
-                }
+        $errorJson = $captureResponse->json();
+        $issue = $errorJson['details'][0]['issue'] ?? null;
 
-                if ($type === 'plan_purchase' && $plan) {
-                    $user->update(['plan' => $plan]);
-                }
+        // If already captured, fetch order details and continue fulfillment idempotently.
+        if ($captureResponse->status() === 422 && $issue === 'ORDER_ALREADY_CAPTURED') {
+            $detailsResponse = $this->paypalHttp()->withToken($token)
+                ->acceptJson()
+                ->get("{$baseUrl}/v2/checkout/orders/{$orderId}");
 
-                $user->addCredits(
-                    $credits,
-                    'purchase',
-                    $type === 'plan_purchase' ? "Plan purchase via Stripe" : "Credit top-up via Stripe",
-                    [
-                        'provider' => 'stripe',
-                        'stripe_session_id' => $session->id,
-                        'amount' => $session->amount_total / 100,
-                        'currency' => 'USD',
-                    ]
-                );
+            if ($detailsResponse->successful()) {
+                return $detailsResponse->json();
             }
         }
 
-        return response()->json(['status' => 'ok']);
+        throw new \RuntimeException('PayPal capture failed: ' . $captureResponse->body());
+    }
+
+    private function getPaypalAccessToken(): string
+    {
+        $clientId = config('services.paypal.client_id');
+        $clientSecret = config('services.paypal.client_secret');
+
+        if (!$clientId || !$clientSecret) {
+            throw new \RuntimeException('PayPal credentials are not configured');
+        }
+
+        $baseUrl = $this->getPaypalBaseUrl();
+
+        $response = $this->paypalHttp()->asForm()
+            ->withBasicAuth($clientId, $clientSecret)
+            ->post("{$baseUrl}/v1/oauth2/token", [
+                'grant_type' => 'client_credentials',
+            ]);
+
+        if (!$response->successful()) {
+            throw new \RuntimeException('PayPal token request failed: ' . $response->body());
+        }
+
+        $accessToken = $response->json('access_token');
+        if (!$accessToken) {
+            throw new \RuntimeException('PayPal token response missing access_token');
+        }
+
+        return $accessToken;
+    }
+
+    private function getPaypalBaseUrl(): string
+    {
+        return config('services.paypal.mode', 'sandbox') === 'live'
+            ? 'https://api-m.paypal.com'
+            : 'https://api-m.sandbox.paypal.com';
+    }
+
+    private function paypalHttp(): PendingRequest
+    {
+        $request = Http::timeout((int) config('services.paypal.timeout', 20));
+
+        if (!config('services.paypal.verify_ssl', true)) {
+            $request = $request->withoutVerifying();
+        }
+
+        return $request;
     }
 
     /**
@@ -337,5 +423,31 @@ class CreditController extends Controller
             'update_destination' => ['cost' => 1, 'label' => 'Update dynamic QR destination'],
             'export_social' => ['cost' => 2, 'label' => 'Export social media sizes'],
         ];
+    }
+
+    private function sendPurchaseReceipt(
+        $user,
+        string $receiptTitle,
+        int $credits,
+        float $amount,
+        string $currency,
+        ?string $paymentId,
+    ): void {
+        try {
+            Mail::to($user->email)->send(new PurchaseReceiptMail(
+                user: $user,
+                receiptTitle: $receiptTitle,
+                credits: $credits,
+                amount: $amount,
+                currency: $currency,
+                paymentId: $paymentId,
+            ));
+        } catch (\Throwable $e) {
+            Log::error('Failed to send purchase receipt email', [
+                'user_id' => $user->id,
+                'payment_id' => $paymentId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

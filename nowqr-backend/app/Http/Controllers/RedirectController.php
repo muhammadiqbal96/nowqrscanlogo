@@ -21,8 +21,15 @@ class RedirectController extends Controller
             ->where('is_active', true)
             ->firstOrFail();
 
-        // Track the scan event
-        $this->trackScan($request, $scanLogo);
+        // Check if the request is a simple preview or bot to avoid false scan counts
+        $userAgent = strtolower($request->header('User-Agent', ''));
+        $isBot = preg_match('/bot|crawl|slurp|spider|mediapartners|whatsapp|telegram|facebook|twitter|linkedin|skype|slack/i', $userAgent);
+        $isPrefetch = $request->header('Sec-Fetch-Purpose') === 'prefetch' || $request->header('X-Purpose') === 'preview';
+
+        // Only track real user scans
+        if (!$isBot && !$isPrefetch) {
+            $this->trackScan($request, $scanLogo);
+        }
 
         return redirect($scanLogo->destination_url);
     }

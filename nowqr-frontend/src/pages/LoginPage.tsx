@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Eye, EyeOff, ArrowRight, Chrome, Loader2 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
@@ -13,11 +13,28 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
-  // Show Google OAuth error if redirected back
-  const googleError = searchParams.get('error')
-  if (googleError) {
-    toast.error('Google login failed. Please try again.')
-  }
+  useEffect(() => {
+    const googleError = searchParams.get('error')
+    const verified = searchParams.get('verified')
+    let shouldCleanUrl = false
+
+    if (googleError === 'account_blocked') {
+      toast.error('Your account is blocked. Please contact support.', { id: 'login-account-blocked' })
+      shouldCleanUrl = true
+    } else if (googleError) {
+      toast.error('Google login failed. Please try again.', { id: 'login-google-error' })
+      shouldCleanUrl = true
+    }
+
+    if (verified === '1') {
+      toast.success('Email verified successfully. You can now sign in.', { id: 'login-email-verified' })
+      shouldCleanUrl = true
+    }
+
+    if (shouldCleanUrl) {
+      navigate('/login', { replace: true })
+    }
+  }, [navigate, searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,6 +48,13 @@ export default function LoginPage() {
       toast.success('Welcome back!')
       navigate('/dashboard')
     } catch (err: any) {
+      if (err.response?.data?.requires_email_verification) {
+        const pendingEmail = err.response?.data?.email || email
+        toast.error(err.response?.data?.message || 'Please verify your email before signing in.')
+        navigate(`/verify-email?email=${encodeURIComponent(pendingEmail)}`)
+        return
+      }
+
       const message = err.response?.data?.message || 'Invalid credentials'
       toast.error(message)
     } finally {

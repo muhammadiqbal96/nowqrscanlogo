@@ -41,9 +41,12 @@ return [
         'api_key' => env('OPENAI_API_KEY'),
     ],
 
-    'stripe' => [
-        'secret' => env('STRIPE_SECRET_KEY'),
-        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    'paypal' => [
+        'mode' => env('PAYPAL_MODE', 'sandbox'),
+        'client_id' => env('PAYPAL_CLIENT_ID'),
+        'client_secret' => env('PAYPAL_CLIENT_SECRET'),
+        'verify_ssl' => (bool) env('PAYPAL_VERIFY_SSL', true),
+        'timeout' => (int) env('PAYPAL_TIMEOUT', 20),
     ],
 
 ];

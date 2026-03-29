@@ -213,7 +213,7 @@ export default function ScanLogoDetailPage() {
                         {/* Download buttons */}
                         <div className="w-full space-y-2 mt-5">
                             <p className="text-xs text-muted-foreground text-center">Download</p>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-3 gap-2">
                                 <button
                                     onClick={() => qrPreviewRef.current?.downloadPNG()}
                                     className="flex items-center justify-center gap-1 py-2 bg-muted hover:bg-muted/80 rounded-lg text-xs font-medium transition-colors"
@@ -225,6 +225,12 @@ export default function ScanLogoDetailPage() {
                                     className="flex items-center justify-center gap-1 py-2 bg-muted hover:bg-muted/80 rounded-lg text-xs font-medium transition-colors"
                                 >
                                     <Download className="w-3 h-3" /> JPG
+                                </button>
+                                <button
+                                    onClick={() => qrPreviewRef.current?.downloadGIF()}
+                                    className="flex items-center justify-center gap-1 py-2 bg-muted hover:bg-muted/80 rounded-lg text-xs font-medium transition-colors"
+                                >
+                                    <Download className="w-3 h-3" /> GIF
                                 </button>
                             </div>
                         </div>

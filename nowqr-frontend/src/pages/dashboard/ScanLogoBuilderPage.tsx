@@ -248,7 +248,7 @@ export default function ScanLogoBuilderPage() {
                             <div className="mt-6 w-full space-y-2 opacity-30">
                                 <p className="text-[10px] text-center text-muted-foreground">Available after creation:</p>
                                 <div className="grid grid-cols-3 gap-2">
-                                    {['PNG', 'GIF', 'WebP'].map((fmt) => (
+                                    {['PNG', 'JPG', 'GIF'].map((fmt) => (
                                         <div key={fmt} className="text-center py-2 bg-muted rounded-lg text-[10px] font-medium text-muted-foreground">{fmt}</div>
                                     ))}
                                 </div>

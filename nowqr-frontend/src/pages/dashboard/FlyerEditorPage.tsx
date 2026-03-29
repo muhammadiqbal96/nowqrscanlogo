@@ -17,6 +17,8 @@ import {
     SelectItem,
 } from '@/components/ui/select'
 import ScanLogoPreview from '@/components/ScanLogoPreview'
+// @ts-ignore
+import gifshot from 'gifshot'
 import toast from 'react-hot-toast'
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -114,7 +116,15 @@ export default function FlyerEditorPage() {
                 ])
                 const camp = campRes.data.campaign
                 setCampaign(camp)
-                setScanLogos(logosRes.data.data || [])
+
+                // Merge campaign.scan_logos with logosRes.data.data to ensure we have all referenced logos
+                const allLogos = [...(camp.scan_logos || [])];
+                (logosRes.data.data || []).forEach((lg: any) => {
+                    if (!allLogos.find(x => x.id === lg.id)) {
+                        allLogos.push(lg);
+                    }
+                });
+                setScanLogos(allLogos)
 
                 // Restore saved canvas state, or populate fresh from campaign data
                 // In flyer mode, prefer sessionStorage canvas from template selection
@@ -180,15 +190,23 @@ export default function FlyerEditorPage() {
     useEffect(() => {
         const prev = prevCanvasSizeRef.current
         if (prev.w === canvasSize.w && prev.h === canvasSize.h) return
+
+        // Use uniform scale to maintain the design aspect ratio
         const scaleX = canvasSize.w / prev.w
         const scaleY = canvasSize.h / prev.h
+        const scale = Math.min(scaleX, scaleY)
+
+        // Center the scaled elements within the new canvas dimensions
+        const offsetX = (canvasSize.w - prev.w * scale) / 2
+        const offsetY = (canvasSize.h - prev.h * scale) / 2
+
         setElements(els => els.map(el => ({
             ...el,
-            x: Math.round(el.x * scaleX),
-            y: Math.round(el.y * scaleY),
-            width: Math.round(el.width * scaleX),
-            height: Math.round(el.height * scaleY),
-            fontSize: el.fontSize ? Math.round(el.fontSize * Math.min(scaleX, scaleY)) : el.fontSize,
+            x: Math.round(el.x * scale + offsetX),
+            y: Math.round(el.y * scale + offsetY),
+            width: Math.round(el.width * scale),
+            height: Math.round(el.height * scale),
+            fontSize: el.fontSize ? Math.round(el.fontSize * scale) : el.fontSize,
         })))
         prevCanvasSizeRef.current = canvasSize
     }, [canvasSize])
@@ -501,7 +519,7 @@ export default function FlyerEditorPage() {
     /* ─── Export ──────────────────────────────────────────────── */
     const [saving, setSaving] = useState(false)
 
-    const exportFlyer = async (format: 'png' | 'jpg') => {
+    const exportFlyer = async (format: 'png' | 'jpg' | 'gif') => {
         if (!canvasRef.current) return
         setExporting(true)
         setSelectedId(null)  // hide selection handles
@@ -510,6 +528,40 @@ export default function FlyerEditorPage() {
         await new Promise(r => setTimeout(r, 100))
 
         try {
+            if (format === 'gif') {
+                const frames: string[] = [];
+                for (let i = 0; i < 10; i++) {
+                    const dataUrl = await toPng(canvasRef.current, {
+                        width: canvasSize.w,
+                        height: canvasSize.h,
+                        style: { transform: 'none', width: `${canvasSize.w}px`, height: `${canvasSize.h}px` },
+                        pixelRatio: 1,
+                        cacheBust: true,
+                    })
+                    frames.push(dataUrl);
+                    await new Promise(r => setTimeout(r, 150));
+                }
+
+                gifshot.createGIF({
+                    images: frames,
+                    gifWidth: canvasSize.w,
+                    gifHeight: canvasSize.h,
+                    interval: 0.15,
+                }, (obj: any) => {
+                    if (!obj.error) {
+                        const link = document.createElement('a')
+                        link.download = `${campaign?.name || 'flyer'}-${canvasSize.label.replace(/\s/g, '-')}.gif`
+                        link.href = obj.image
+                        link.click()
+                        toast.success(`Flyer downloaded as GIF!`)
+                    } else {
+                        toast.error('Failed to encode GIF')
+                    }
+                    setExporting(false)
+                });
+                return;
+            }
+
             const exportFn = format === 'png' ? toPng : toJpeg
             const dataUrl = await exportFn(canvasRef.current, {
                 width: canvasSize.w,
@@ -668,6 +720,13 @@ export default function FlyerEditorPage() {
                     >
                         JPG
                     </button>
+                    <button
+                        onClick={() => exportFlyer('gif')}
+                        disabled={exporting || saving}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-lg text-xs font-medium hover:bg-muted/80 disabled:opacity-50"
+                    >
+                        GIF
+                    </button>
                 </div>
             </div>
 
@@ -696,17 +755,19 @@ export default function FlyerEditorPage() {
                         </div>
 
                         {/* AI Regenerate */}
-                        <div>
-                            <button
-                                onClick={regenerateFromAI}
-                                disabled={regenerating}
-                                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg text-xs font-medium hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 transition-all"
-                            >
-                                {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                                {regenerating ? 'Generating...' : 'Regenerate with AI'}
-                            </button>
-                            <p className="text-[10px] text-muted-foreground mt-1 text-center">Uses 5 credits</p>
-                        </div>
+                        {!isFlyerMode && (
+                            <div>
+                                <button
+                                    onClick={regenerateFromAI}
+                                    disabled={regenerating}
+                                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg text-xs font-medium hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 transition-all"
+                                >
+                                    {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                    {regenerating ? 'Generating...' : 'Regenerate with AI'}
+                                </button>
+                                <p className="text-[10px] text-muted-foreground mt-1 text-center">Uses 5 credits</p>
+                            </div>
+                        )}
 
                         {/* Background */}
                         <div>
@@ -862,7 +923,7 @@ export default function FlyerEditorPage() {
                                                     url={'https://nowqr.com'}
                                                     shortUrl={logo?.short_url}
                                                     shape={logo?.shape || 'shield'}
-                                                    animation="none"
+                                                    animation={logo?.animation || 'none'}
                                                     color={logo?.color || campaign?.primary_color || '#c8401a'}
                                                     ctaText={logo?.cta_text || campaign?.cta_button_text || 'SCAN ME'}
                                                     safeScanBadge={false}

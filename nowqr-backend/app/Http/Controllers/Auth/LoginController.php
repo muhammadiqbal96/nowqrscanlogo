@@ -33,6 +33,14 @@ class LoginController extends Controller
             ]);
         }
 
+        if (!$user->hasVerifiedEmail()) {
+            return response()->json([
+                'message' => 'Please verify your email before signing in.',
+                'requires_email_verification' => true,
+                'email' => $user->email,
+            ], 403);
+        }
+
         // Revoke previous tokens if desired (optional, for single session)
         // $user->tokens()->delete();
 
@@ -51,6 +59,7 @@ class LoginController extends Controller
                 'credits' => $user->credits,
                 'avatar' => $user->avatar_url,
                 'is_admin' => $user->is_admin,
+                'email_verified' => $user->hasVerifiedEmail(),
             ],
             'token' => $token,
         ]);
@@ -81,6 +90,7 @@ class LoginController extends Controller
                 'credits' => $user->credits,
                 'avatar' => $user->avatar_url,
                 'is_admin' => $user->is_admin,
+                'email_verified' => $user->hasVerifiedEmail(),
                 'created_at' => $user->created_at,
             ],
         ]);

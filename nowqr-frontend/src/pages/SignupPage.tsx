@@ -39,7 +39,14 @@ export default function SignupPage() {
     }
     setLoading(true)
     try {
-      await register({ first_name: firstName, last_name: lastName, business_name: businessName || undefined, email, password })
+      const result = await register({ first_name: firstName, last_name: lastName, business_name: businessName || undefined, email, password })
+
+      if (result.requires_email_verification) {
+        toast.success(result.message || 'Account created. Please verify your email.')
+        navigate(`/verify-email?email=${encodeURIComponent(result.email || email)}`)
+        return
+      }
+
       toast.success('Account created! Welcome to NowQR!')
       navigate('/dashboard')
     } catch (err: any) {

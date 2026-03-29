@@ -9,6 +9,7 @@ import PricingPage from '@/pages/PricingPage'
 import ResourcesPage from '@/pages/ResourcesPage'
 import LoginPage from '@/pages/LoginPage'
 import SignupPage from '@/pages/SignupPage'
+import VerifyEmailPage from '@/pages/VerifyEmailPage'
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
 import AuthCallbackPage from '@/pages/AuthCallbackPage'
 import ResetPasswordPage from '@/pages/ResetPasswordPage'
@@ -62,7 +63,7 @@ function App() {
   const location = useLocation()
   const isDashboard = location.pathname.startsWith('/dashboard')
   const isAdmin = location.pathname.startsWith('/admin')
-  const isAuthPage = ['/login', '/signup', '/forgot-password', '/auth/callback', '/reset-password'].includes(location.pathname)
+  const isAuthPage = ['/login', '/signup', '/verify-email', '/forgot-password', '/auth/callback', '/reset-password'].includes(location.pathname)
   const isPublicPage = location.pathname.startsWith('/p/')
   const showChrome = !isAuthPage && !isDashboard && !isAdmin && !isPublicPage
 
@@ -89,6 +90,7 @@ function App() {
           {/* Auth pages */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />

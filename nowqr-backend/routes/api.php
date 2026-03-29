@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\ForgotPasswordController;
+use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
@@ -32,6 +33,11 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [LoginController::class, 'login']);
     Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
     Route::post('/reset-password', [ForgotPasswordController::class, 'resetPassword']);
+    Route::post('/email/verification-notification', [EmailVerificationController::class, 'resend'])
+        ->middleware('throttle:6,1');
+    Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+        ->middleware('signed')
+        ->name('verification.verify');
 
     // Google OAuth
     Route::get('/google', [GoogleAuthController::class, 'redirect']);
@@ -143,5 +149,5 @@ Route::middleware(['auth:sanctum', 'check.blocked'])->group(function () {
     });
 });
 
-// Stripe webhook (no auth)
-Route::post('/stripe/webhook', [CreditController::class, 'stripeWebhook']);
+// PayPal webhook / payment webhook (no auth)
+Route::post('/paypal/webhook', [CreditController::class, 'paypalWebhook']);

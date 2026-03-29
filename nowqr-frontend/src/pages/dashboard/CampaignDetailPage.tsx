@@ -8,6 +8,8 @@ import {
 import { toPng } from 'html-to-image'
 import { campaignApi, scanLogoApi } from '@/lib/api'
 import ScanLogoPreview from '@/components/ScanLogoPreview'
+// @ts-ignore
+import gifshot from 'gifshot'
 import toast from 'react-hot-toast'
 
 export default function CampaignDetailPage() {
@@ -18,7 +20,9 @@ export default function CampaignDetailPage() {
     const [scanLogos, setScanLogos] = useState<any[]>([])
     const [flyers, setFlyers] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
-    const [downloading, setDownloading] = useState(false)
+    const [downloadingFormat, setDownloadingFormat] = useState<'png' | 'gif' | null>(null)
+    const [downloadingFlyerId, setDownloadingFlyerId] = useState<{ id: number, format: 'png' | 'gif' } | null>(null)
+    const flyerExportRef = useRef<HTMLDivElement>(null)
     const [deleteModal, setDeleteModal] = useState(false)
     const [deleting, setDeleting] = useState(false)
     const [deleteFlyerModal, setDeleteFlyerModal] = useState<number | null>(null)
@@ -36,7 +40,16 @@ export default function CampaignDetailPage() {
             ])
             const camp = campRes.data.campaign
             setCampaign(camp)
-            setScanLogos(camp.scan_logos || logosRes.data.data || [])
+
+            // Merge campaign.scan_logos with logosRes.data.data to ensure we have all referenced logos
+            const allLogos = [...(camp.scan_logos || [])];
+            (logosRes.data.data || []).forEach((lg: any) => {
+                if (!allLogos.find(x => x.id === lg.id)) {
+                    allLogos.push(lg);
+                }
+            });
+            setScanLogos(allLogos)
+
             setFlyers(camp.flyers || [])
         } catch {
             toast.error('Failed to load campaign')
@@ -75,15 +88,114 @@ export default function CampaignDetailPage() {
         }
     }
 
-    const handleDownloadPost = async () => {
+    const handleDownloadPostGif = async () => {
         if (!postRef.current || !campaign) return
-        setDownloading(true)
+        setDownloadingFormat('gif')
         try {
             const el = postRef.current
-            const rect = el.getBoundingClientRect()
+            const width = el.offsetWidth
+            const height = el.offsetHeight
+            const frames: string[] = [];
+
+            // For a simple GIF, we will just take 10 frames over 1.5 seconds.
+            // Note: capturing CSS animations with html-to-image might not be perfectly smooth.
+            for (let i = 0; i < 10; i++) {
+                const dataUrl = await toPng(el, {
+                    width: width,
+                    height: height,
+                    style: { margin: '0', transform: 'none' },
+                    pixelRatio: 1.5,
+                    cacheBust: true,
+                })
+                frames.push(dataUrl);
+                await new Promise(r => setTimeout(r, 150));
+            }
+
+            gifshot.createGIF({
+                images: frames,
+                gifWidth: width * 1.5,
+                gifHeight: height * 1.5,
+                interval: 0.15,
+            }, (obj: any) => {
+                if (!obj.error) {
+                    const link = document.createElement('a')
+                    link.download = `${campaign.name || 'post'}-main-post.gif`
+                    link.href = obj.image
+                    link.click()
+                    toast.success('Post downloaded as GIF!')
+                } else {
+                    toast.error('Failed to encode GIF')
+                }
+                setDownloadingFormat(null)
+            });
+        } catch {
+            toast.error('Failed to download post')
+            setDownloadingFormat(null)
+        }
+    }
+
+    const handleDownloadFlyerGif = async (flyer: any) => {
+        if (!flyer.canvas_state) {
+            toast.error('This flyer does not support GIF export');
+            return;
+        }
+        setDownloadingFlyerId({ id: flyer.id, format: 'gif' })
+
+        // Let React render the full scale hidden flyer
+        setTimeout(async () => {
+            try {
+                const el = flyerExportRef.current
+                if (!el) throw new Error('Ref not found')
+
+                const width = el.offsetWidth
+                const height = el.offsetHeight
+                const frames: string[] = [];
+
+                for (let i = 0; i < 10; i++) {
+                    const dataUrl = await toPng(el, {
+                        width, height,
+                        style: { margin: '0', transform: 'none' },
+                        pixelRatio: 1.5,
+                        cacheBust: true,
+                    })
+                    frames.push(dataUrl);
+                    await new Promise(r => setTimeout(r, 150));
+                }
+
+                gifshot.createGIF({
+                    images: frames,
+                    gifWidth: width * 1.5,
+                    gifHeight: height * 1.5,
+                    interval: 0.15,
+                }, (obj: any) => {
+                    if (!obj.error) {
+                        const link = document.createElement('a')
+                        link.download = `${flyer.title || 'flyer'}.gif`
+                        link.href = obj.image
+                        link.click()
+                        toast.success('Flyer downloaded as GIF!')
+                    } else {
+                        toast.error('Failed to encode GIF')
+                    }
+                    setDownloadingFlyerId(null)
+                });
+            } catch (e) {
+                toast.error('Failed to generate Flyer GIF')
+                setDownloadingFlyerId(null)
+            }
+        }, 500)
+    }
+
+    const handleDownloadPost = async () => {
+        if (!postRef.current || !campaign) return
+        setDownloadingFormat('png')
+        try {
+            const el = postRef.current
+            const width = el.offsetWidth
+            const height = el.offsetHeight
             const dataUrl = await toPng(el, {
-                width: rect.width,
-                height: rect.height,
+                width: width,
+                height: height,
                 style: {
                     margin: '0',
                     transform: 'none',
@@ -98,7 +210,7 @@ export default function CampaignDetailPage() {
         } catch {
             toast.error('Failed to download post')
         } finally {
-            setDownloading(false)
+            setDownloadingFormat(null)
         }
     }
 
@@ -172,14 +284,24 @@ export default function CampaignDetailPage() {
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-bold">Main Post</h2>
                     <div className="flex items-center gap-3">
-                        <button
-                            onClick={handleDownloadPost}
-                            disabled={downloading || !campaign.headline}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-40"
-                        >
-                            {downloading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-                            Download
-                        </button>
+                        <div className="flex bg-card border border-border rounded-lg overflow-hidden disabled:opacity-40">
+                            <button
+                                onClick={handleDownloadPost}
+                                disabled={downloadingFormat !== null || (!campaign.headline && !(campaign.page_design?.elements?.length > 0))}
+                                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 hover:bg-muted transition-colors border-r border-border"
+                            >
+                                {downloadingFormat === 'png' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                                PNG
+                            </button>
+                            <button
+                                onClick={handleDownloadPostGif}
+                                disabled={downloadingFormat !== null || (!campaign.headline && !(campaign.page_design?.elements?.length > 0))}
+                                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 hover:bg-muted transition-colors"
+                            >
+                                {downloadingFormat === 'gif' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                                GIF
+                            </button>
+                        </div>
                         <Link to={`/dashboard/campaigns/${campaign.id}/flyer`}
                             className="flex items-center gap-1.5 text-xs text-primary hover:underline">
                             <Pencil className="w-3 h-3" /> Edit in Canvas
@@ -198,8 +320,8 @@ export default function CampaignDetailPage() {
                         const displayH = ch * scale
                         return (
                             <div className="flex justify-center">
-                                <div ref={postRef} className="rounded-2xl overflow-hidden shadow-lg border border-border" style={{ width: maxW, height: displayH }}>
-                                    <div className="relative origin-top-left" style={{
+                                <div className="rounded-2xl overflow-hidden shadow-lg border border-border" style={{ width: maxW, height: displayH }}>
+                                    <div ref={postRef} className="relative origin-top-left" style={{
                                         width: cw,
                                         height: ch,
                                         transform: `scale(${scale})`,
@@ -236,25 +358,30 @@ export default function CampaignDetailPage() {
                                                     }} />
                                                 )}
                                                 {el.type === 'image' && (
-                                                    <img src={el.src} alt="" className="w-full h-full pointer-events-none"
+                                                    <img src={el.src} alt="" crossOrigin="anonymous" className="w-full h-full pointer-events-none"
                                                         style={{ objectFit: (el.objectFit || 'cover') as any, borderRadius: el.borderRadius || 0 }} />
                                                 )}
-                                                {el.type === 'qr' && (
-                                                    <div className="w-full h-full flex items-center justify-center">
-                                                        <ScanLogoPreview
-                                                            url={'https://nowqr.com'}
-                                                            shortUrl={scanLogos[0]?.short_url}
-                                                            shape={scanLogos[0]?.shape || 'shield'}
-                                                            animation="none"
-                                                            color={scanLogos[0]?.color || primaryColor}
-                                                            ctaText={scanLogos[0]?.cta_text || campaign.cta_button_text || 'SCAN'}
-                                                            safeScanBadge={false}
-                                                            centerLogoUrl={scanLogos[0]?.center_logo_path ? `/storage/${scanLogos[0].center_logo_path}` : null}
-                                                            size={Math.min(el.width, el.height) - 20}
-                                                            minimal
-                                                        />
-                                                    </div>
-                                                )}
+                                                {el.type === 'qr' && (() => {
+                                                    const logo = (pd.qrScanLogoMap && pd.qrScanLogoMap[el.id] !== undefined)
+                                                        ? scanLogos.find(sl => sl.id == pd.qrScanLogoMap[el.id]) || scanLogos[0]
+                                                        : scanLogos[0];
+                                                    return (
+                                                        <div className="w-full h-full flex items-center justify-center">
+                                                            <ScanLogoPreview
+                                                                url={'https://nowqr.com'}
+                                                                shortUrl={logo?.short_url}
+                                                                shape={logo?.shape || 'shield'}
+                                                                animation={logo?.animation || 'none'}
+                                                                color={logo?.color || primaryColor}
+                                                                ctaText={logo?.cta_text || campaign.cta_button_text || 'SCAN'}
+                                                                safeScanBadge={false}
+                                                                centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
+                                                                size={Math.min(el.width, el.height) - 20}
+                                                                minimal
+                                                            />
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         ))}
                                     </div>
@@ -302,8 +429,8 @@ export default function CampaignDetailPage() {
                                             url={'https://nowqr.com'}
                                             shortUrl={scanLogos[0].short_url}
                                             shape={scanLogos[0].shape || 'shield'}
-                                            animation="none"
-                                            color={scanLogos[0].color || '#ffffff'}
+                                            animation={scanLogos[0].animation || 'none'}
+                                            color={scanLogos[0].color || primaryColor}
                                             ctaText={scanLogos[0].cta_text || campaign.cta_button_text || 'SCAN'}
                                             safeScanBadge={false}
                                             centerLogoUrl={scanLogos[0].center_logo_path ? `/storage/${scanLogos[0].center_logo_path}` : null}
@@ -559,7 +686,12 @@ export default function CampaignDetailPage() {
                                             {new Date(flyer.created_at).toLocaleDateString()}
                                         </p>
                                     </div>
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="flex items-center gap-1 opacity-100 transition-opacity">
+                                        <button onClick={() => setTimeout(() => handleDownloadFlyerGif(flyer), 10)}
+                                            disabled={downloadingFlyerId?.id === flyer.id}
+                                            className="px-2 py-1 text-[10px] font-medium rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 border border-transparent hover:border-border">
+                                            {(downloadingFlyerId?.id === flyer.id && downloadingFlyerId?.format === 'gif') ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : 'GIF'}
+                                        </button>
                                         {flyer.image_path && (
                                             <a href={`/storage/${flyer.image_path}`} download={flyer.title || 'flyer'}
                                                 className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -592,6 +724,66 @@ export default function CampaignDetailPage() {
                     </div>
                 )}
             </div>
+
+            {/* ─── Hidden Offscreen Flyer Renderer for GIF Export ─── */}
+            {downloadingFlyerId && (() => {
+                const targetFlyer = flyers.find(f => f.id === downloadingFlyerId.id)
+                if (!targetFlyer || !targetFlyer.canvas_state) return null;
+                const cs = targetFlyer.canvas_state;
+                const fw = 1080
+                const fh = cs.aspectRatio === '1:1' ? 1080 : cs.aspectRatio === '4:5' ? 1350 : 1920
+                return (
+                    <div style={{ position: 'fixed', top: '-10000px', left: '-10000px', pointerEvents: 'none', zIndex: -1 }}>
+                        <div ref={flyerExportRef} style={{
+                            width: fw, height: fh,
+                            background: cs.bgImage ? `url(${cs.bgImage}) center/cover` : (cs.bgColor || '#1a1a2e'),
+                            position: 'relative', overflow: 'hidden'
+                        }}>
+                            {cs.elements.map((el: any) => (
+                                <div key={el.id} className="absolute" style={{
+                                    left: el.x, top: el.y, width: el.width, height: el.height,
+                                    transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                                }}>
+                                    {el.type === 'text' && (
+                                        <div className="w-full h-full overflow-hidden flex items-center justify-center" style={{
+                                            fontSize: el.fontSize, fontFamily: el.fontFamily,
+                                            fontWeight: el.fontWeight as any, fontStyle: el.fontStyle, color: el.textColor,
+                                            textAlign: el.textAlign as any, lineHeight: 1.3, wordBreak: 'break-word',
+                                        }}>{el.content}</div>
+                                    )}
+                                    {el.type === 'shape' && (
+                                        <div className="w-full h-full" style={{
+                                            backgroundColor: el.bgColor || '#c8401a', borderRadius: el.borderRadius || 0,
+                                            opacity: el.opacity ?? 1, border: el.borderWidth ? `${el.borderWidth}px solid ${el.borderColor || '#fff'}` : undefined,
+                                        }} />
+                                    )}
+                                    {el.type === 'image' && (
+                                        <img src={el.src} alt="" crossOrigin="anonymous" className="w-full h-full pointer-events-none"
+                                            style={{ objectFit: (el.objectFit || 'cover') as any, borderRadius: el.borderRadius || 0 }} />
+                                    )}
+                                    {el.type === 'qr' && (() => {
+                                        const logo = (cs.qrScanLogoMap && cs.qrScanLogoMap[el.id] !== undefined)
+                                            ? scanLogos.find((sl: any) => sl.id == cs.qrScanLogoMap[el.id]) || scanLogos[0]
+                                            : scanLogos[0];
+                                        return (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <ScanLogoPreview
+                                                    url={'https://nowqr.com'}
+                                                    shortUrl={logo?.short_url} shape={logo?.shape || 'shield'}
+                                                    animation={logo?.animation || 'none'} color={logo?.color || primaryColor}
+                                                    ctaText={logo?.cta_text || campaign.cta_button_text || 'SCAN'} safeScanBadge={false}
+                                                    centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
+                                                    size={Math.min(el.width, el.height) - 20} minimal
+                                                />
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )
+            })()}
 
             {/* ─── Delete Campaign Modal ─── */}
             {deleteModal && (

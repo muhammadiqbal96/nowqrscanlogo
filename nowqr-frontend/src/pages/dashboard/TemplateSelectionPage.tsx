@@ -461,8 +461,10 @@ function TemplateMiniPreview({ preset }: { preset: TemplatePreset }) {
                 width: p(preset.elements.headline.w, W), height: p(preset.elements.headline.h, H),
             }}>
                 <div className="font-bold leading-[1.1] line-clamp-3"
-                    style={{ fontSize: '11px', color: preset.elements.headline.color, textAlign: preset.layout,
-                        fontWeight: preset.elements.headline.weight, fontFamily: `'${preset.font}', sans-serif` }}>
+                    style={{
+                        fontSize: '11px', color: preset.elements.headline.color, textAlign: preset.layout,
+                        fontWeight: preset.elements.headline.weight, fontFamily: `'${preset.font}', sans-serif`
+                    }}>
                     Your Headline Goes Here
                 </div>
             </div>
@@ -513,9 +515,11 @@ function TemplateMiniPreview({ preset }: { preset: TemplatePreset }) {
                 justifyContent: preset.layout === 'center' ? 'center' : preset.layout === 'right' ? 'flex-end' : 'flex-start',
             }}>
                 <div className="px-3 py-0.5 rounded-sm font-bold uppercase tracking-wider"
-                    style={{ fontSize: '4.5px', color: preset.elements.cta.color,
+                    style={{
+                        fontSize: '4.5px', color: preset.elements.cta.color,
                         backgroundColor: preset.elements.cta.bgColor || 'transparent',
-                        borderRadius: 4 }}>
+                        borderRadius: 4
+                    }}>
                     Shop Now
                 </div>
             </div>
@@ -687,32 +691,32 @@ export default function TemplateSelectionPage() {
     /* ─── Load campaign ─── */
     useEffect(() => {
         if (!id) return
-        ;(async () => {
-            try {
-                const [campRes, logosRes] = await Promise.all([
-                    campaignApi.get(Number(id)),
-                    scanLogoApi.list(),
-                ])
-                const camp = campRes.data.campaign
-                setCampaign(camp)
-                setScanLogos(logosRes.data.data || [])
+            ; (async () => {
+                try {
+                    const [campRes, logosRes] = await Promise.all([
+                        campaignApi.get(Number(id)),
+                        scanLogoApi.list(),
+                    ])
+                    const camp = campRes.data.campaign
+                    setCampaign(camp)
+                    setScanLogos(logosRes.data.data || [])
 
-                // For campaign flow (not flyer), pre-fill AI content from campaign
-                if (!isFlyer && camp.headline) {
-                    setAiContent({
-                        headline: camp.headline,
-                        sub_headline: camp.sub_headline || '',
-                        description: camp.description || '',
-                        cta_button_text: camp.cta_button_text || '',
-                    })
+                    // For campaign flow (not flyer), pre-fill AI content from campaign
+                    if (!isFlyer && camp.headline) {
+                        setAiContent({
+                            headline: camp.headline,
+                            sub_headline: camp.sub_headline || '',
+                            description: camp.description || '',
+                            cta_button_text: camp.cta_button_text || '',
+                        })
+                    }
+                } catch {
+                    toast.error('Failed to load campaign')
+                    navigate('/dashboard/campaigns')
+                } finally {
+                    setLoading(false)
                 }
-            } catch {
-                toast.error('Failed to load campaign')
-                navigate('/dashboard/campaigns')
-            } finally {
-                setLoading(false)
-            }
-        })()
+            })()
     }, [id])
 
     /* ─── Generate AI content for flyer from description ─── */
@@ -724,7 +728,7 @@ export default function TemplateSelectionPage() {
         setApplying(true)
         try {
             const res = await aiApi.generateContent({
-                campaign_id: campaign.id,
+                campaign_id: isFlyer ? undefined : campaign.id,
                 business_name: campaign.business_name,
                 business_description: flyerDescription,
                 target_audience: campaign.target_audience || '',
@@ -890,7 +894,7 @@ export default function TemplateSelectionPage() {
                                     className={`px-3 py-1.5 rounded-full text-xs font-medium capitalize transition-all ${flyerTone === tone
                                         ? 'bg-primary text-primary-foreground shadow-md'
                                         : 'bg-muted/50 text-muted-foreground hover:bg-muted'
-                                    }`}>
+                                        }`}>
                                     {tone}
                                 </button>
                             ))}
@@ -973,7 +977,7 @@ export default function TemplateSelectionPage() {
                                 className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${isActive
                                     ? 'bg-primary text-primary-foreground shadow-md'
                                     : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
-                                }`}>
+                                    }`}>
                                 {cat.name}
                             </button>
                         )

@@ -11,6 +11,7 @@ export interface User {
   plan: 'free' | 'creator' | 'agency';
   credits: number;
   avatar: string | null;
+  email_verified?: boolean;
   is_admin?: boolean;
   created_at?: string;
 }
@@ -27,7 +28,7 @@ interface AuthContextType {
     business_name?: string;
     email: string;
     password: string;
-  }) => Promise<void>;
+  }) => Promise<{ requires_email_verification?: boolean; email?: string; message?: string }>;
   logout: () => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -96,7 +97,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string;
   }) => {
     const response = await authApi.register(data);
-    saveAuth(response.data.user, response.data.token);
+
+    if (response.data.token && response.data.user) {
+      saveAuth(response.data.user, response.data.token);
+      return { requires_email_verification: false, email: response.data.user.email, message: response.data.message };
+    }
+
+    return {
+      requires_email_verification: !!response.data.requires_email_verification,
+      email: response.data.user?.email ?? data.email,
+      message: response.data.message,
+    };
   };
 
   const logout = async () => {

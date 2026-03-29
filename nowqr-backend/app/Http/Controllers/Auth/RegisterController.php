@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Mail\WelcomeSignupMail;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules\Password;
 
 class RegisterController extends Controller
@@ -34,10 +36,18 @@ class RegisterController extends Controller
         // Give signup bonus credits
         $user->addCredits(10, 'signup_bonus', 'Welcome bonus credits');
 
-        $token = $user->createToken('auth-token')->plainTextToken;
+        try {
+            Mail::to($user->email)->send(new WelcomeSignupMail($user));
+            $user->sendEmailVerificationNotification();
+        } catch (\Throwable $e) {
+            Log::error('Failed to send signup emails', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
-            'message' => 'Account created successfully',
+            'message' => 'Account created successfully. Please verify your email before signing in.',
             'user' => [
                 'id' => $user->id,
                 'first_name' => $user->first_name,
@@ -48,8 +58,9 @@ class RegisterController extends Controller
                 'plan' => $user->plan,
                 'credits' => $user->credits,
                 'avatar' => $user->avatar_url,
+                'email_verified' => $user->hasVerifiedEmail(),
             ],
-            'token' => $token,
+            'requires_email_verification' => true,
         ], 201);
     }
 }
