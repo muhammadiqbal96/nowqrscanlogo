@@ -15,6 +15,7 @@ import AuthCallbackPage from '@/pages/AuthCallbackPage'
 import ResetPasswordPage from '@/pages/ResetPasswordPage'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import AdminRoute from '@/components/AdminRoute'
+import GuestRoute from '@/components/GuestRoute'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import AdminLayout from '@/components/layout/AdminLayout'
 import DashboardHomePage from '@/pages/dashboard/DashboardHomePage'
@@ -87,13 +88,15 @@ function App() {
           {/* Public campaign pages */}
           <Route path="/p/:slug" element={<CampaignPublicPage />} />
 
-          {/* Auth pages */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/verify-email" element={<VerifyEmailPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/auth/callback" element={<AuthCallbackPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Auth pages (guest-only) */}
+          <Route element={<GuestRoute />}>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+          </Route>
 
           {/* Dashboard (protected) */}
           <Route element={<ProtectedRoute />}>

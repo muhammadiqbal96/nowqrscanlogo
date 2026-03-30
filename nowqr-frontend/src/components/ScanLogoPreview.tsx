@@ -26,14 +26,14 @@ export interface ScanLogoPreviewRef {
     downloadGIF: () => void
 }
 
-const SHAPE_CLIP: Record<string, string> = {
-    circle: '50%',
-    shield: '20px',
-    gear: '16px',
-    eye: '40% 10%',
-    diamond: '16px',
-    hexagon: '24px',
-    square: '8px',
+const SHAPE_SVG_PATHS: Record<string, React.ReactNode> = {
+    circle: <circle cx="12" cy="12" r="10" />,
+    square: <rect width="18" height="18" x="3" y="3" rx="2" />,
+    shield: <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
+    hexagon: <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />,
+    diamond: <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z" />,
+    gear: <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915Z" />,
+    eye: <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0Z" />
 }
 
 const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(function ScanLogoPreview({
@@ -45,28 +45,30 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
     safeScanBadge = true,
     centerLogoUrl,
     shortUrl,
-    size = 160,
+    size = 200,
     minimal = false,
 }, ref) {
     const qrRef = useRef<any>(null)
-    const isDiamond = shape === 'diamond'
-    const borderRadius = SHAPE_CLIP[shape] || '16px'
-    const qrSize = Math.floor(size * 0.75)
+
+    // Choose QR size depending on shape to ensure it fits well within the boundaries without touching them
+    const isComfortableShape = shape === 'square' || shape === 'circle' || shape === 'hexagon'
+    const qrSize = Math.floor(size * (isComfortableShape ? 0.55 : 0.45))
+
     // Removed shortUrl from QR value so we only encode 'url' to avoid triggering the shortcode visit if not applicable
-    const qrValue = url || shortUrl || 'https://nowqr.com'
+    const qrValue = url || shortUrl || 'https://nowqr.ai'
 
     const containerRef = useRef<HTMLDivElement>(null)
     const wrapperRef = useRef<HTMLDivElement>(null)
 
     // Base64 Logo handling to prevent Canvas Taint (CORS) when downloading
     const [base64Logo, setBase64Logo] = useState<string | undefined>(undefined)
-    
+
     useEffect(() => {
         if (!centerLogoUrl) {
             setBase64Logo(undefined)
             return
         }
-        
+
         let isMounted = true
         fetch(centerLogoUrl)
             .then(res => res.blob())
@@ -83,22 +85,22 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                 console.error("Failed to load center logo as base64", err)
                 if (isMounted) setBase64Logo(centerLogoUrl) // fallback
             })
-            
+
         return () => { isMounted = false }
     }, [centerLogoUrl])
 
     // Reusable function to force the layout for export (white background)
-    const cloneWrapperForExport = async (format: 'png'|'jpeg') => {
+    const cloneWrapperForExport = async (format: 'png' | 'jpeg') => {
         if (!wrapperRef.current) return
-        
+
         const originalAnimation = containerRef.current?.style.animation || ''
         if (containerRef.current) {
             containerRef.current.style.animation = 'none'
         }
-        
+
         try {
             const opts = {
-                pixelRatio: 4, 
+                pixelRatio: 4,
                 cacheBust: true,
                 style: {
                     background: '#ffffff',
@@ -106,10 +108,10 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                     borderRadius: '8px'
                 }
             }
-            const dataUrl = format === 'png' 
+            const dataUrl = format === 'png'
                 ? await toPng(wrapperRef.current, opts)
                 : await toJpeg(wrapperRef.current, { ...opts, quality: 0.95 });
-                
+
             return dataUrl;
         } finally {
             if (containerRef.current) {
@@ -129,13 +131,13 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
             }
         },
         downloadJPG: async () => {
-             const dataUrl = await cloneWrapperForExport('jpeg')
-             if (dataUrl) {
-                 const link = document.createElement('a')
-                 link.download = 'scanlogo.jpg'
-                 link.href = dataUrl
-                 link.click()
-             }
+            const dataUrl = await cloneWrapperForExport('jpeg')
+            if (dataUrl) {
+                const link = document.createElement('a')
+                link.download = 'scanlogo.jpg'
+                link.href = dataUrl
+                link.click()
+            }
         },
         downloadGIF: async () => {
             if (!wrapperRef.current || !containerRef.current) return;
@@ -152,31 +154,29 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                 const progress = i / numFrames;
 
                 let transform = containerRef.current.style.transform;
-                // Add base rotation for diamond shape
-                const baseTransform = isDiamond ? 'rotate(45deg)' : '';
 
                 if (animation === 'spin') {
-                    transform = `${baseTransform} rotate(${progress * 360}deg)`;
+                    transform = `rotate(${progress * 360}deg)`;
                 } else if (animation === 'pulse') {
                     const scale = 1 + Math.sin(progress * Math.PI) * 0.06;
-                    transform = `${baseTransform} scale(${scale})`;
+                    transform = `scale(${scale})`;
                 } else if (animation === 'bounce') {
                     const y = Math.sin(progress * Math.PI * 2) * -14;
-                    transform = `${baseTransform} translateY(${y}px)`;
+                    transform = `translateY(${y}px)`;
                 } else if (animation === 'expand') {
                     const scale = 1 + Math.sin(progress * Math.PI) * 0.12;
-                    transform = `${baseTransform} scale(${scale})`;
+                    transform = `scale(${scale})`;
                 }
 
                 containerRef.current.style.transform = transform;
 
                 const dataUrl = await cloneWrapperForExport('png')
-                if(dataUrl) frames.push(dataUrl);
+                if (dataUrl) frames.push(dataUrl);
             }
 
             // Restore original animation
             containerRef.current.style.animation = originalAnimation;
-            containerRef.current.style.transform = isDiamond ? 'rotate(45deg)' : '';
+            containerRef.current.style.transform = '';
 
             gifshot.createGIF({
                 images: frames,
@@ -203,21 +203,31 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                 style={{
                     width: size,
                     height: size,
-                    borderRadius,
-                    border: `3px solid ${color}`,
-                    backgroundColor: `${color}10`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     margin: '0 auto',
-                    transform: isDiamond ? 'rotate(45deg)' : undefined,
                     '--scanlogo-color': color,
                     '--scanlogo-glow-color': `${color}66`,
                     position: 'relative',
-                    overflow: 'hidden',
                 } as React.CSSProperties}
             >
-                <div style={{ transform: isDiamond ? 'rotate(-45deg)' : undefined }}>
+                {/* SVG Background Shape */}
+                <svg
+                    width="100%"
+                    height="100%"
+                    viewBox="0 0 24 24"
+                    fill={`${color}10`}
+                    stroke={color}
+                    strokeWidth={3 * 24 / size}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ position: 'absolute', top: 0, left: 0, zIndex: 0 }}
+                >
+                    {SHAPE_SVG_PATHS[shape] || SHAPE_SVG_PATHS['square']}
+                </svg>
+
+                <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <QRCode
                         ref={qrRef}
                         value={qrValue}

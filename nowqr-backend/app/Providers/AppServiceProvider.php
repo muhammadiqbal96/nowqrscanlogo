@@ -38,14 +38,12 @@ class AppServiceProvider extends ServiceProvider
                 ]);
         });
 
-        ResetPassword::createUrlUsing(function (object $user, string $token) {
-            $appUrl = rtrim((string) config('app.url', 'http://localhost:8000'), '/');
-            return $appUrl . '/reset-password?token=' . $token . '&email=' . urlencode($user->email);
+        ResetPassword::createUrlUsing(function (object $user, string $token) use ($frontendUrl) {
+            return $frontendUrl . '/reset-password?token=' . $token . '&email=' . urlencode($user->email);
         });
 
-        ResetPassword::toMailUsing(function (object $notifiable, string $token) {
-            $appUrl = rtrim((string) config('app.url', 'http://localhost:8000'), '/');
-            $resetUrl = $appUrl . '/reset-password?token=' . $token . '&email=' . urlencode($notifiable->email);
+        ResetPassword::toMailUsing(function (object $notifiable, string $token) use ($frontendUrl) {
+            $resetUrl = $frontendUrl . '/reset-password?token=' . $token . '&email=' . urlencode($notifiable->email);
 
             return (new MailMessage)
                 ->subject('Reset your NowQR password')
@@ -53,7 +51,7 @@ class AppServiceProvider extends ServiceProvider
                     'name' => $notifiable->first_name ?? 'there',
                     'email' => $notifiable->email,
                     'resetUrl' => $resetUrl,
-                    'frontendUrl' => $appUrl,
+                    'frontendUrl' => $frontendUrl,
                     'appName' => config('app.name', 'NowQR'),
                     'supportEmail' => config('mail.from.address'),
                     'year' => now()->year,

@@ -9,27 +9,55 @@ type ApiErrorResponse = {
     errors?: Record<string, string[]>
 }
 
+function validatePassword(value: string): string | null {
+    if (value.length < 8) {
+        return 'Password must be at least 8 characters'
+    }
+    if (!/[a-z]/.test(value)) {
+        return 'Password must include at least one lowercase letter'
+    }
+    if (!/[A-Z]/.test(value)) {
+        return 'Password must include at least one uppercase letter'
+    }
+    if (!/[0-9]/.test(value)) {
+        return 'Password must include at least one number'
+    }
+    if (!/[^A-Za-z0-9]/.test(value)) {
+        return 'Password must include at least one special character'
+    }
+
+    return null
+}
+
 export default function ResetPasswordPage() {
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
     const [showPassword, setShowPassword] = useState(false)
     const [password, setPassword] = useState('')
     const [passwordConfirmation, setPasswordConfirmation] = useState('')
+    const [confirmTouched, setConfirmTouched] = useState(false)
     const [loading, setLoading] = useState(false)
 
     const token = searchParams.get('token') || ''
     const email = searchParams.get('email') || ''
+    const passwordsDoNotMatch =
+        confirmTouched && passwordConfirmation.length > 0 && password !== passwordConfirmation
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (password.length < 8) {
-            toast.error('Password must be at least 8 characters')
+
+        const passwordValidationError = validatePassword(password)
+        if (passwordValidationError) {
+            toast.error(passwordValidationError)
             return
         }
+
         if (password !== passwordConfirmation) {
+            setConfirmTouched(true)
             toast.error('Passwords do not match')
             return
         }
+
         setLoading(true)
         try {
             await authApi.resetPassword({ email, token, password, password_confirmation: passwordConfirmation })
@@ -38,9 +66,10 @@ export default function ResetPasswordPage() {
         } catch (err: unknown) {
             const axiosError = err as { response?: { data?: ApiErrorResponse } }
             const data = axiosError.response?.data
+            const passwordError = data?.errors?.password?.[0]
             const passwordConfirmationError = data?.errors?.password_confirmation?.[0]
 
-            toast.error(passwordConfirmationError || data?.message || 'Failed to reset password')
+            toast.error(passwordConfirmationError || passwordError || data?.message || 'Failed to reset password')
         } finally {
             setLoading(false)
         }
@@ -94,9 +123,19 @@ export default function ResetPasswordPage() {
                             type="password"
                             placeholder="Confirm new password"
                             value={passwordConfirmation}
-                            onChange={(e) => setPasswordConfirmation(e.target.value)}
-                            className="w-full px-4 py-3 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
+                            onChange={(e) => {
+                                setPasswordConfirmation(e.target.value)
+                                if (!confirmTouched) {
+                                    setConfirmTouched(true)
+                                }
+                            }}
+                            onBlur={() => setConfirmTouched(true)}
+                            className={`w-full px-4 py-3 bg-card border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all ${passwordsDoNotMatch ? 'border-red-500' : 'border-border'
+                                }`}
                         />
+                        {passwordsDoNotMatch && (
+                            <p className="mt-1 text-sm text-red-600">Passwords do not match.</p>
+                        )}
                     </div>
                     <button
                         type="submit"

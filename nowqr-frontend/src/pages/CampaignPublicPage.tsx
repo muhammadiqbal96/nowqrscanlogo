@@ -31,9 +31,14 @@ interface CampaignPage {
     }[]
 }
 
-const SHAPE_RADIUS: Record<string, string> = {
-    circle: '50%', shield: '20px', gear: '16px',
-    eye: '40% 10%', diamond: '16px', hexagon: '24px', square: '8px',
+const SHAPE_SVG_PATHS: Record<string, React.ReactNode> = {
+    circle: <circle cx="12" cy="12" r="10" />,
+    square: <rect width="18" height="18" x="3" y="3" rx="2" />,
+    shield: <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
+    hexagon: <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />,
+    diamond: <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z" />,
+    gear: <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915Z" />,
+    eye: <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0Z" />
 }
 
 export default function CampaignPublicPage() {
@@ -71,6 +76,9 @@ export default function CampaignPublicPage() {
     const color = campaign.primary_color || '#c8401a'
     const font = campaign.font_family || 'Inter, system-ui, sans-serif'
     const scanLogo = campaign.scan_logos?.[0]
+    const size = 200;
+    const isComfortableShape = scanLogo && ['square', 'circle', 'hexagon'].includes(scanLogo.shape);
+    const qrSize = Math.floor(size * (isComfortableShape ? 0.55 : 0.45));
     const bgImage = campaign.background_image_path ? `/storage/${campaign.background_image_path}` : null
     const logoUrl = campaign.logo_path ? `/storage/${campaign.logo_path}` : null
 
@@ -134,39 +142,51 @@ export default function CampaignPublicPage() {
                         <div
                             className={`scanlogo-container scanlogo-anim-${scanLogo.animation}`}
                             style={{
-                                width: 180,
-                                height: 180,
-                                borderRadius: SHAPE_RADIUS[scanLogo.shape] || '16px',
-                                border: `3px solid ${scanLogo.color}`,
-                                backgroundColor: `${scanLogo.color}15`,
+                                width: size,
+                                height: size,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 cursor: 'pointer',
                                 position: 'relative',
-                                overflow: 'hidden',
                                 '--scanlogo-color': scanLogo.color,
                                 '--scanlogo-glow-color': `${scanLogo.color}66`,
                             } as React.CSSProperties}
                         >
-                            <QRCode
-                                value={scanLogo.destination_url}
-                                size={130}
-                                bgColor="transparent"
-                                fgColor={scanLogo.color}
-                                qrStyle="dots"
-                                eyeRadius={[
-                                    { outer: [8, 8, 0, 8], inner: [4, 4, 0, 4] },
-                                    { outer: [8, 8, 8, 0], inner: [4, 4, 4, 0] },
-                                    { outer: [8, 0, 8, 8], inner: [4, 0, 4, 4] },
-                                ]}
-                                logoImage={scanLogo.center_logo_path ? `/storage/${scanLogo.center_logo_path}` : undefined}
-                                logoWidth={36}
-                                logoHeight={36}
-                                removeQrCodeBehindLogo
-                                logoPaddingStyle="circle"
-                                logoPadding={3}
-                            />
+                            {/* SVG Outline Rendered behind the QR */}
+                            <svg
+                                viewBox="0 0 24 24"
+                                className="absolute inset-0 w-full h-full pointer-events-none"
+                                fill={`${scanLogo.color}15`}
+                                stroke={scanLogo.color}
+                                strokeWidth={3 * 24 / size}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                {SHAPE_SVG_PATHS[scanLogo.shape] || SHAPE_SVG_PATHS['square']}
+                            </svg>
+
+                            <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <QRCode
+                                    value={scanLogo.destination_url || 'https://nowqr.ai'}
+                                    size={qrSize}
+                                    bgColor="transparent"
+                                    fgColor={scanLogo.color}
+                                    qrStyle="dots"
+                                    ecLevel="H"
+                                    eyeRadius={[
+                                        { outer: [8, 8, 0, 8], inner: [4, 4, 0, 4] },
+                                        { outer: [8, 8, 8, 0], inner: [4, 4, 4, 0] },
+                                        { outer: [8, 0, 8, 8], inner: [4, 0, 4, 4] },
+                                    ]}
+                                    logoImage={scanLogo.center_logo_path ? `/storage/${scanLogo.center_logo_path}` : undefined}
+                                    logoWidth={Math.floor(qrSize * 0.25)}
+                                    logoHeight={Math.floor(qrSize * 0.25)}
+                                    removeQrCodeBehindLogo
+                                    logoPaddingStyle="circle"
+                                    logoPadding={2}
+                                />
+                            </div>
 
                             {/* Flash overlay: CTA text flashes 3 times then reveals QR */}
                             {scanLogo.animation === 'flash' && (
