@@ -46,8 +46,20 @@ class ForgotPasswordController extends Controller
         $request->validate([
             'email' => ['required', 'string', 'email'],
             'token' => ['required', 'string'],
-            'password' => ['required', 'string', 'min:8', 'confirmed', PasswordRule::defaults()],
+            'password' => ['required', 'string', 'min:8', PasswordRule::defaults()],
+            'password_confirmation' => ['required', 'string', 'same:password'],
+        ], [
+            'password_confirmation.same' => 'Passwords do not match.',
         ]);
+
+        if ((string) $request->input('password') !== (string) $request->input('password_confirmation')) {
+            return response()->json([
+                'message' => 'Passwords do not match.',
+                'errors' => [
+                    'password_confirmation' => ['Passwords do not match.'],
+                ],
+            ], 422);
+        }
 
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),

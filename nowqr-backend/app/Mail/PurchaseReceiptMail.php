@@ -31,6 +31,8 @@ class PurchaseReceiptMail extends Mailable
 
     public function content(): Content
     {
+        $frontendUrl = rtrim((string) config('app.frontend_url', 'http://localhost:5173'), '/');
+
         return new Content(
             view: 'emails.purchase-receipt',
             with: [
@@ -40,7 +42,7 @@ class PurchaseReceiptMail extends Mailable
                 'amount' => $this->amount,
                 'currency' => strtoupper($this->currency),
                 'paymentId' => $this->paymentId,
-                'frontendUrl' => config('app.frontend_url'),
+                'frontendUrl' => $frontendUrl,
                 'appName' => config('app.name', 'NowQR'),
                 'supportEmail' => config('mail.from.address'),
                 'year' => now()->year,

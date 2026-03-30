@@ -22,13 +22,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        VerifyEmail::toMailUsing(function (object $notifiable, string $url) {
+        $frontendUrl = rtrim((string) config('app.frontend_url', 'http://localhost:5173'), '/');
+
+        VerifyEmail::toMailUsing(function (object $notifiable, string $url) use ($frontendUrl) {
             return (new MailMessage)
                 ->subject('Verify your NowQR email address')
                 ->view('emails.auth.verify-email', [
                     'name' => $notifiable->first_name ?? 'there',
                     'email' => $notifiable->email,
                     'verifyUrl' => $url,
+                    'frontendUrl' => $frontendUrl,
                     'appName' => config('app.name', 'NowQR'),
                     'supportEmail' => config('mail.from.address'),
                     'year' => now()->year,
@@ -36,13 +39,13 @@ class AppServiceProvider extends ServiceProvider
         });
 
         ResetPassword::createUrlUsing(function (object $user, string $token) {
-            $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
-            return $frontendUrl . '/reset-password?token=' . $token . '&email=' . urlencode($user->email);
+            $appUrl = rtrim((string) config('app.url', 'http://localhost:8000'), '/');
+            return $appUrl . '/reset-password?token=' . $token . '&email=' . urlencode($user->email);
         });
 
         ResetPassword::toMailUsing(function (object $notifiable, string $token) {
-            $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
-            $resetUrl = $frontendUrl . '/reset-password?token=' . $token . '&email=' . urlencode($notifiable->email);
+            $appUrl = rtrim((string) config('app.url', 'http://localhost:8000'), '/');
+            $resetUrl = $appUrl . '/reset-password?token=' . $token . '&email=' . urlencode($notifiable->email);
 
             return (new MailMessage)
                 ->subject('Reset your NowQR password')
@@ -50,6 +53,7 @@ class AppServiceProvider extends ServiceProvider
                     'name' => $notifiable->first_name ?? 'there',
                     'email' => $notifiable->email,
                     'resetUrl' => $resetUrl,
+                    'frontendUrl' => $appUrl,
                     'appName' => config('app.name', 'NowQR'),
                     'supportEmail' => config('mail.from.address'),
                     'year' => now()->year,

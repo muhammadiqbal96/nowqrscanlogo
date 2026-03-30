@@ -4,6 +4,11 @@ import { Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react'
 import { authApi } from '@/lib/api'
 import toast from 'react-hot-toast'
 
+type ApiErrorResponse = {
+    message?: string
+    errors?: Record<string, string[]>
+}
+
 export default function ResetPasswordPage() {
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
@@ -30,8 +35,12 @@ export default function ResetPasswordPage() {
             await authApi.resetPassword({ email, token, password, password_confirmation: passwordConfirmation })
             toast.success('Password reset successfully!')
             navigate('/login')
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Failed to reset password')
+        } catch (err: unknown) {
+            const axiosError = err as { response?: { data?: ApiErrorResponse } }
+            const data = axiosError.response?.data
+            const passwordConfirmationError = data?.errors?.password_confirmation?.[0]
+
+            toast.error(passwordConfirmationError || data?.message || 'Failed to reset password')
         } finally {
             setLoading(false)
         }
