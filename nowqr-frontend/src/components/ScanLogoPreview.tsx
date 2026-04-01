@@ -4,6 +4,7 @@ import { Shield } from 'lucide-react'
 import { toPng, toJpeg } from 'html-to-image'
 // @ts-ignore
 import gifshot from 'gifshot'
+import { getFlashTextLayout, getQrScaleForShape, getScanLogoVisuals, getShapeFrameScale } from '@/lib/scanLogoVisuals'
 import './ScanLogoPreview.css'
 
 export interface ScanLogoPreviewProps {
@@ -21,9 +22,9 @@ export interface ScanLogoPreviewProps {
 }
 
 export interface ScanLogoPreviewRef {
-    downloadPNG: () => void
-    downloadJPG: () => void
-    downloadGIF: () => void
+    downloadPNG: () => Promise<void>
+    downloadJPG: () => Promise<void>
+    downloadGIF: () => Promise<void>
 }
 
 const SHAPE_SVG_PATHS: Record<string, React.ReactNode> = {
@@ -50,12 +51,17 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
 }, ref) {
     const qrRef = useRef<any>(null)
 
-    // Choose QR size depending on shape to ensure it fits well within the boundaries without touching them
-    const isComfortableShape = shape === 'square' || shape === 'circle' || shape === 'hexagon'
-    const qrSize = Math.floor(size * (isComfortableShape ? 0.55 : 0.45))
+    // Keep QR module size unchanged and grow the shape frame for extra spacing.
+    const shapeSize = Math.round(size * getShapeFrameScale(shape))
+    const qrSize = Math.floor(size * getQrScaleForShape(shape))
+    const scanLogoVisuals = getScanLogoVisuals(color)
+    const resolvedCtaText = ctaText.trim() || 'TAP TO SCAN'
+    const flashTextLayout = getFlashTextLayout(shape, shapeSize, resolvedCtaText)
 
-    // Removed shortUrl from QR value so we only encode 'url' to avoid triggering the shortcode visit if not applicable
-    const qrValue = url || shortUrl || 'https://nowqr.ai'
+    // Prefer the shortest available URL so the QR matrix stays less dense and easier to scan.
+    const qrValue = [shortUrl, url]
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .sort((a, b) => a.length - b.length)[0] || 'https://nowqr.ai'
 
     const containerRef = useRef<HTMLDivElement>(null)
     const wrapperRef = useRef<HTMLDivElement>(null)
@@ -89,137 +95,316 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
         return () => { isMounted = false }
     }, [centerLogoUrl])
 
-    // Reusable function to force the layout for export (white background)
-    const cloneWrapperForExport = async (format: 'png' | 'jpeg') => {
-        if (!wrapperRef.current) return
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-        const originalAnimation = containerRef.current?.style.animation || ''
-        if (containerRef.current) {
-            containerRef.current.style.animation = 'none'
+    const getExportDimensions = () => {
+        if (!wrapperRef.current) {
+            return { width: 1, height: 1 }
+        }
+
+        const rect = wrapperRef.current.getBoundingClientRect()
+        return {
+            width: Math.max(1, Math.ceil(rect.width)),
+            height: Math.max(1, Math.ceil(rect.height)),
+        }
+    }
+
+    const triggerDataUrlDownload = async (dataUrl: string, filename: string) => {
+        const isDataUrl = dataUrl.startsWith('data:')
+        let objectUrl: string | null = null
+        const link = document.createElement('a')
+        link.download = filename
+        link.rel = 'noopener'
+
+        try {
+            // Using object URLs is more reliable than large data URLs for GIF downloads.
+            if (isDataUrl) {
+                const response = await fetch(dataUrl)
+                const blob = await response.blob()
+                objectUrl = URL.createObjectURL(blob)
+                link.href = objectUrl
+            } else {
+                link.href = dataUrl
+            }
+
+            document.body.appendChild(link)
+            link.click()
+
+            // Let the browser process the click before caller clears loading state.
+            await delay(0)
+        } finally {
+            link.remove()
+            if (objectUrl) {
+                const revokeUrl = objectUrl
+                window.setTimeout(() => URL.revokeObjectURL(revokeUrl), 5000)
+            }
+        }
+    }
+
+    // Reusable function to force the layout for export (white background)
+    const cloneWrapperForExport = async (
+        format: 'png' | 'jpeg',
+        options?: {
+            pixelRatio?: number
+            cacheBust?: boolean
+            width?: number
+            height?: number
+            freezeTransform?: string
+            flashOpacity?: string
+        }
+    ) => {
+        if (!wrapperRef.current || !containerRef.current) return
+
+        const pixelRatio = options?.pixelRatio ?? 4
+        const cacheBust = options?.cacheBust ?? true
+        const exportSize = getExportDimensions()
+        const width = options?.width ?? exportSize.width
+        const height = options?.height ?? exportSize.height
+
+        const wrapperEl = wrapperRef.current
+        const containerEl = containerRef.current
+        const flashOverlay = containerEl.querySelector<HTMLDivElement>('.scanlogo-flash-overlay')
+        const shapeEl = containerEl.querySelector<SVGElement>('.scanlogo-shape')
+
+        const originalWrapperWidth = wrapperEl.style.width
+        const originalWrapperHeight = wrapperEl.style.height
+        const originalWrapperTransform = wrapperEl.style.transform
+        const originalContainerAnimation = containerEl.style.animation
+        const originalContainerTransform = containerEl.style.transform
+        const originalShapeAnimation = shapeEl?.style.animation || ''
+        const originalFlashAnimation = flashOverlay?.style.animation || ''
+        const originalFlashOpacity = flashOverlay?.style.opacity || ''
+
+        wrapperEl.style.width = `${width}px`
+        wrapperEl.style.height = `${height}px`
+        wrapperEl.style.transform = 'none'
+
+        containerEl.style.animation = 'none'
+        containerEl.style.transform = options?.freezeTransform ?? 'none'
+
+        if (shapeEl) {
+            shapeEl.style.animation = 'none'
+        }
+
+        if (flashOverlay) {
+            flashOverlay.style.animation = 'none'
+            if (typeof options?.flashOpacity !== 'undefined') {
+                flashOverlay.style.opacity = options.flashOpacity
+            }
         }
 
         try {
             const opts = {
-                pixelRatio: 4,
-                cacheBust: true,
+                pixelRatio,
+                cacheBust,
+                width,
+                height,
                 style: {
                     background: '#ffffff',
-                    padding: '20px',
-                    borderRadius: '8px'
+                    margin: '0',
+                    width: `${width}px`,
+                    height: `${height}px`,
+                    transform: 'none',
+                    boxSizing: 'border-box',
                 }
             }
             const dataUrl = format === 'png'
-                ? await toPng(wrapperRef.current, opts)
-                : await toJpeg(wrapperRef.current, { ...opts, quality: 0.95 });
+                ? await toPng(wrapperEl, opts)
+                : await toJpeg(wrapperEl, { ...opts, quality: 0.95 })
 
-            return dataUrl;
+            return dataUrl
         } finally {
-            if (containerRef.current) {
-                containerRef.current.style.animation = originalAnimation
+            wrapperEl.style.width = originalWrapperWidth
+            wrapperEl.style.height = originalWrapperHeight
+            wrapperEl.style.transform = originalWrapperTransform
+
+            containerEl.style.animation = originalContainerAnimation
+            containerEl.style.transform = originalContainerTransform
+
+            if (shapeEl) {
+                shapeEl.style.animation = originalShapeAnimation
+            }
+
+            if (flashOverlay) {
+                flashOverlay.style.animation = originalFlashAnimation
+                flashOverlay.style.opacity = originalFlashOpacity
             }
         }
     }
 
     useImperativeHandle(ref, () => ({
         downloadPNG: async () => {
-            const dataUrl = await cloneWrapperForExport('png')
-            if (dataUrl) {
-                const link = document.createElement('a')
-                link.download = 'scanlogo.png'
-                link.href = dataUrl
-                link.click()
+            const { width, height } = getExportDimensions()
+            const dataUrl = await cloneWrapperForExport('png', {
+                width,
+                height,
+                flashOpacity: '0',
+            })
+            if (!dataUrl) {
+                throw new Error('Failed to render PNG')
             }
+
+            await triggerDataUrlDownload(dataUrl, 'scanlogo.png')
         },
         downloadJPG: async () => {
-            const dataUrl = await cloneWrapperForExport('jpeg')
-            if (dataUrl) {
-                const link = document.createElement('a')
-                link.download = 'scanlogo.jpg'
-                link.href = dataUrl
-                link.click()
+            const { width, height } = getExportDimensions()
+            const dataUrl = await cloneWrapperForExport('jpeg', {
+                width,
+                height,
+                flashOpacity: '0',
+            })
+            if (!dataUrl) {
+                throw new Error('Failed to render JPG')
             }
+
+            await triggerDataUrlDownload(dataUrl, 'scanlogo.jpg')
         },
         downloadGIF: async () => {
-            if (!wrapperRef.current || !containerRef.current) return;
-            const originalAnimation = containerRef.current.style.animation;
-
-            // disable css animation briefly so we can render frames manually
-            containerRef.current.style.animation = 'none';
-
-            const frames: string[] = [];
-            const numFrames = 15;
-
-            // Generate frames by applying inline transforms
-            for (let i = 0; i < numFrames; i++) {
-                const progress = i / numFrames;
-
-                let transform = containerRef.current.style.transform;
-
-                if (animation === 'spin') {
-                    transform = `rotate(${progress * 360}deg)`;
-                } else if (animation === 'pulse') {
-                    const scale = 1 + Math.sin(progress * Math.PI) * 0.06;
-                    transform = `scale(${scale})`;
-                } else if (animation === 'bounce') {
-                    const y = Math.sin(progress * Math.PI * 2) * -14;
-                    transform = `translateY(${y}px)`;
-                } else if (animation === 'expand') {
-                    const scale = 1 + Math.sin(progress * Math.PI) * 0.12;
-                    transform = `scale(${scale})`;
-                }
-
-                containerRef.current.style.transform = transform;
-
-                const dataUrl = await cloneWrapperForExport('png')
-                if (dataUrl) frames.push(dataUrl);
+            if (!wrapperRef.current || !containerRef.current) {
+                throw new Error('Preview is not ready yet')
             }
 
-            // Restore original animation
-            containerRef.current.style.animation = originalAnimation;
-            containerRef.current.style.transform = '';
+            const containerEl = containerRef.current
+            const flashOverlay = containerEl.querySelector<HTMLDivElement>('.scanlogo-flash-overlay')
+            const isFlashAnimation = animation === 'flash' && !!flashOverlay
+            const { width, height } = getExportDimensions()
 
-            gifshot.createGIF({
-                images: frames,
-                gifWidth: wrapperRef.current.offsetWidth * 2,
-                gifHeight: wrapperRef.current.offsetHeight * 2,
-                interval: 0.1, // 100ms per frame
-            }, (obj: any) => {
-                if (!obj.error) {
-                    const link = document.createElement('a');
-                    link.download = 'scanlogo.gif';
-                    link.href = obj.image;
-                    link.click();
+            const frames: string[] = []
+            const numFrames = isFlashAnimation ? 15 : 10
+
+            for (let i = 0; i < numFrames; i++) {
+                const progress = i / (numFrames - 1)
+                let transform = 'none'
+
+                if (animation === 'spin') {
+                    transform = `rotate(${progress * 360}deg)`
+                } else if (animation === 'pulse') {
+                    const scale = 1 + Math.sin(progress * Math.PI) * 0.06
+                    transform = `scale(${scale})`
+                } else if (animation === 'bounce') {
+                    const y = Math.sin(progress * Math.PI * 2) * -14
+                    transform = `translateY(${y}px)`
+                } else if (animation === 'expand') {
+                    const scale = 1 + Math.sin(progress * Math.PI) * 0.12
+                    transform = `scale(${scale})`
                 }
-            });
+
+                let flashOpacity: string | undefined
+                if (isFlashAnimation) {
+                    const isFlashOn =
+                        progress < 0.12 ||
+                        (progress >= 0.32 && progress < 0.44) ||
+                        (progress >= 0.62 && progress < 0.72)
+                    flashOpacity = isFlashOn ? '1' : '0'
+                }
+
+                const dataUrl = await cloneWrapperForExport('png', {
+                    pixelRatio: 1,
+                    cacheBust: false,
+                    width,
+                    height,
+                    freezeTransform: transform,
+                    flashOpacity,
+                })
+
+                if (dataUrl) {
+                    frames.push(dataUrl)
+                }
+            }
+
+            if (!frames.length) {
+                throw new Error('Failed to capture GIF frames')
+            }
+
+            const encodeGif = (images: string[], timeoutMs: number) =>
+                new Promise<string>((resolve, reject) => {
+                    let settled = false
+                    const timeoutId = window.setTimeout(() => {
+                        if (settled) return
+                        settled = true
+                        reject(new Error('GIF encoding timed out'))
+                    }, timeoutMs)
+
+                    gifshot.createGIF({
+                        images,
+                        gifWidth: width,
+                        gifHeight: height,
+                        interval: isFlashAnimation ? 0.30 : 0.16,
+                        sampleInterval: 15,
+                        numWorkers: 2,
+                    }, (obj: any) => {
+                        if (settled) return
+                        settled = true
+                        window.clearTimeout(timeoutId)
+
+                        if (obj.error || !obj.image) {
+                            reject(new Error(obj.errorMsg || 'Failed to encode GIF'))
+                            return
+                        }
+
+                        resolve(obj.image)
+                    })
+                })
+
+            let gifDataUrl: string
+            try {
+                gifDataUrl = await encodeGif(frames, 24000)
+            } catch {
+                // Retry once with fewer frames to avoid getting stuck on heavy encodes.
+                const stride = Math.max(1, Math.ceil(frames.length / 6))
+                const reducedFrames = frames.filter((_, index) => index % stride === 0).slice(0, 6)
+                gifDataUrl = await encodeGif(reducedFrames, 12000)
+            }
+
+            await triggerDataUrlDownload(gifDataUrl, 'scanlogo.gif')
         },
     }))
 
     return (
-        <div ref={wrapperRef} className="scanlogo-preview-wrapper" style={{ textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div
+            ref={wrapperRef}
+            className="scanlogo-preview-wrapper"
+            style={{
+                textAlign: 'center',
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                width: 'fit-content',
+                margin: '0 auto',
+            }}
+        >
             {/* Animated container */}
             <div
                 ref={containerRef}
                 className={`scanlogo-container scanlogo-anim-${animation}`}
                 style={{
-                    width: size,
-                    height: size,
+                    width: shapeSize,
+                    height: shapeSize,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     margin: '0 auto',
-                    '--scanlogo-color': color,
-                    '--scanlogo-glow-color': `${color}66`,
+                    '--scanlogo-color': scanLogoVisuals.resolvedColor,
+                    '--scanlogo-glow-color': scanLogoVisuals.glowColor,
+                    '--scanlogo-flash-text-color': scanLogoVisuals.flashTextColor,
+                    '--scanlogo-flash-font-size': `${flashTextLayout.fontSizePx}px`,
+                    '--scanlogo-flash-max-width': `${flashTextLayout.maxWidthPercent}%`,
+                    '--scanlogo-flash-letter-spacing': `${flashTextLayout.letterSpacingEm}em`,
+                    '--scanlogo-label-text-light': scanLogoVisuals.labelTextColorLightBg,
+                    '--scanlogo-label-text-dark': scanLogoVisuals.labelTextColorDarkBg,
                     position: 'relative',
                 } as React.CSSProperties}
             >
                 {/* SVG Background Shape */}
                 <svg
+                    className={`scanlogo-shape ${animation === 'glow' ? 'scanlogo-shape-glow' : ''}`}
                     width="100%"
                     height="100%"
                     viewBox="0 0 24 24"
-                    fill={`${color}10`}
-                    stroke={color}
-                    strokeWidth={3 * 24 / size}
+                    fill={scanLogoVisuals.shapeFillColor}
+                    stroke={scanLogoVisuals.shapeStrokeColor}
+                    strokeWidth={3 * 24 / shapeSize}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     style={{ position: 'absolute', top: 0, left: 0, zIndex: 0 }}
@@ -232,29 +417,41 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                         ref={qrRef}
                         value={qrValue}
                         size={qrSize}
-                        bgColor="transparent"
-                        fgColor={color}
-                        qrStyle="dots"
-                        ecLevel="H"
+                        bgColor={scanLogoVisuals.qrBgColor}
+                        fgColor={scanLogoVisuals.qrFgColor}
+                        qrStyle="squares"
+                        ecLevel="Q"
+                        quietZone={2}
                         eyeRadius={[
                             { outer: [8, 8, 0, 8], inner: [4, 4, 0, 4] },
                             { outer: [8, 8, 8, 0], inner: [4, 4, 4, 0] },
                             { outer: [8, 0, 8, 8], inner: [4, 0, 4, 4] },
                         ]}
                         logoImage={base64Logo}
-                        logoWidth={qrSize * 0.2}
-                        logoHeight={qrSize * 0.2}
+                        logoWidth={qrSize * 0.16}
+                        logoHeight={qrSize * 0.16}
                         logoOpacity={1}
                         removeQrCodeBehindLogo
                         logoPaddingStyle="circle"
-                        logoPadding={2}
+                        logoPadding={1}
+                        enableCORS
                     />
                 </div>
 
                 {/* Flash overlay: shows CTA text, flashes 3 times, then reveals QR */}
                 {animation === 'flash' && (
-                    <div className={`scanlogo-flash-overlay ${size <= 60 ? 'flash-sm' : size <= 120 ? 'flash-md' : 'flash-lg'}`}>
-                        <span className="flash-cta-text">{ctaText}</span>
+                    <div className="scanlogo-flash-overlay">
+                        <svg
+                            className="scanlogo-flash-shape"
+                            width="100%"
+                            height="100%"
+                            viewBox="0 0 24 24"
+                            fill={scanLogoVisuals.resolvedColor}
+                            stroke="none"
+                        >
+                            {SHAPE_SVG_PATHS[shape] || SHAPE_SVG_PATHS['square']}
+                        </svg>
+                        <span className="flash-cta-text">{resolvedCtaText}</span>
                     </div>
                 )}
             </div>
@@ -263,9 +460,12 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
             {!minimal && (
                 <p
                     className="scanlogo-cta-text"
-                    style={{ color, marginTop: 10 }}
+                    style={{
+                        textShadow: scanLogoVisuals.labelTextShadow,
+                        marginTop: 10,
+                    }}
                 >
-                    {ctaText}
+                    {resolvedCtaText}
                 </p>
             )}
 

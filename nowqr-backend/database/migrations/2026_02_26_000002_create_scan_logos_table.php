@@ -20,7 +20,7 @@ return new class extends Migration
 
             // Design
             $table->enum('shape', ['shield', 'circle', 'gear', 'eye', 'diamond', 'hexagon', 'square'])->default('shield');
-            $table->enum('animation', ['spin', 'pulse', 'expand', 'bounce', 'glow', 'none'])->default('pulse');
+            $table->enum('animation', ['spin', 'pulse', 'expand', 'bounce', 'glow', 'flash', 'none'])->default('pulse');
             $table->string('color')->default('#c8401a');
             $table->string('cta_text')->default('SCAN NOW'); // e.g., "TAP TO ORDER"
             $table->string('center_logo_path')->nullable(); // logo embedded in QR center

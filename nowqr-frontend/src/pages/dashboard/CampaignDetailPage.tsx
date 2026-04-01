@@ -12,6 +12,130 @@ import ScanLogoPreview from '@/components/ScanLogoPreview'
 import gifshot from 'gifshot'
 import toast from 'react-hot-toast'
 
+type AspectRatio = '1:1' | '9:16' | '4:5' | '16:9'
+
+const CANVAS_SIZES: Record<AspectRatio, { w: number; h: number }> = {
+    '1:1': { w: 1080, h: 1080 },
+    '9:16': { w: 1080, h: 1920 },
+    '4:5': { w: 1080, h: 1350 },
+    '16:9': { w: 1920, h: 1080 },
+}
+
+const getCanvasSize = (aspectRatio?: string) => {
+    if (aspectRatio && aspectRatio in CANVAS_SIZES) {
+        return CANVAS_SIZES[aspectRatio as AspectRatio]
+    }
+    return CANVAS_SIZES['9:16']
+}
+
+const getCanvasRenderScale = (design: any) => {
+    const { w, h } = getCanvasSize(design?.aspectRatio)
+    const elements = Array.isArray(design?.elements) ? design.elements : []
+
+    let maxRight = 0
+    let maxBottom = 0
+    for (const el of elements) {
+        const x = Number(el?.x) || 0
+        const y = Number(el?.y) || 0
+        const width = Number(el?.width) || 0
+        const height = Number(el?.height) || 0
+        maxRight = Math.max(maxRight, x + width)
+        maxBottom = Math.max(maxBottom, y + height)
+    }
+
+    const needsNormalize = maxRight > w * 1.02 || maxBottom > h * 1.02
+    const scaleX = needsNormalize && maxRight > 0 ? w / maxRight : 1
+    const scaleY = needsNormalize && maxBottom > 0 ? h / maxBottom : 1
+    const fontScale = Math.min(scaleX, scaleY)
+
+    return { w, h, scaleX, scaleY, fontScale }
+}
+
+const parseAnimationDurationMs = (durationValue: string): number => {
+    const trimmed = (durationValue || '').trim()
+    if (!trimmed || trimmed === '0s' || trimmed === '0ms') return 0
+
+    if (trimmed.endsWith('ms')) {
+        const value = Number(trimmed.slice(0, -2))
+        return Number.isFinite(value) ? value : 0
+    }
+
+    if (trimmed.endsWith('s')) {
+        const value = Number(trimmed.slice(0, -1))
+        return Number.isFinite(value) ? value * 1000 : 0
+    }
+
+    return 0
+}
+
+const waitForNextPaint = () => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve())
+    })
+})
+
+const copyCanvasContent = (sourceRoot: HTMLElement, cloneRoot: HTMLElement) => {
+    const sourceCanvases = sourceRoot.querySelectorAll<HTMLCanvasElement>('canvas')
+    const cloneCanvases = cloneRoot.querySelectorAll<HTMLCanvasElement>('canvas')
+
+    cloneCanvases.forEach((targetCanvas, index) => {
+        const sourceCanvas = sourceCanvases[index]
+        if (!sourceCanvas) return
+
+        try {
+            targetCanvas.width = sourceCanvas.width
+            targetCanvas.height = sourceCanvas.height
+            const ctx = targetCanvas.getContext('2d')
+            if (ctx) {
+                ctx.drawImage(sourceCanvas, 0, 0)
+            }
+        } catch {
+            // Ignore copy failures; the exporter will surface a user-visible error if rendering fails.
+        }
+    })
+}
+
+const setFlashOverlayState = (root: HTMLElement, visible: boolean) => {
+    const overlays = root.querySelectorAll<HTMLElement>('.scanlogo-flash-overlay')
+    overlays.forEach((overlay) => {
+        overlay.style.animation = 'none'
+        overlay.style.opacity = visible ? '1' : '0'
+    })
+}
+
+const applyScanLogoAnimationFrame = (root: HTMLElement, progressMs: number) => {
+    const animatedNodes = root.querySelectorAll<HTMLElement>(
+        '.scanlogo-flash-overlay, .scanlogo-anim-spin, .scanlogo-anim-pulse, .scanlogo-anim-bounce, .scanlogo-anim-expand, .scanlogo-shape-glow'
+    )
+
+    animatedNodes.forEach((node) => {
+        const computed = window.getComputedStyle(node)
+        const duration = (computed.animationDuration || '0s').split(',')[0]?.trim() || '0s'
+        const durationMs = parseAnimationDurationMs(duration)
+
+        if (!durationMs) return
+
+        const progressOffset = progressMs % durationMs
+        node.style.animationPlayState = 'paused'
+        node.style.animationDelay = `-${progressOffset}ms`
+    })
+}
+
+const triggerDataUrlDownload = async (dataUrl: string, fileName: string) => {
+    const response = await fetch(dataUrl)
+    const blob = await response.blob()
+    const objectUrl = URL.createObjectURL(blob)
+
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+}
+
 export default function CampaignDetailPage() {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -93,43 +217,113 @@ export default function CampaignDetailPage() {
         setDownloadingFormat('gif')
         try {
             const el = postRef.current
-            const width = el.offsetWidth
-            const height = el.offsetHeight
-            const frames: string[] = [];
+            const isCanvasPost = !!campaign.page_design?.elements?.length
+            const nativeCanvas = isCanvasPost ? getCanvasRenderScale(campaign.page_design) : null
+            const width = nativeCanvas?.w || el.offsetWidth
+            const height = nativeCanvas?.h || el.offsetHeight
+            const exportHost = document.createElement('div')
+            exportHost.style.position = 'fixed'
+            exportHost.style.left = '-10000px'
+            exportHost.style.top = '-10000px'
+            exportHost.style.pointerEvents = 'none'
+            exportHost.style.opacity = '0'
+            exportHost.style.zIndex = '-1'
 
-            // For a simple GIF, we will just take 10 frames over 1.5 seconds.
-            // Note: capturing CSS animations with html-to-image might not be perfectly smooth.
-            for (let i = 0; i < 10; i++) {
-                const dataUrl = await toPng(el, {
-                    width: width,
-                    height: height,
-                    style: { margin: '0', transform: 'none' },
-                    pixelRatio: 1.5,
-                    cacheBust: true,
-                })
-                frames.push(dataUrl);
-                await new Promise(r => setTimeout(r, 150));
-            }
+            const exportNode = el.cloneNode(true) as HTMLDivElement
+            exportNode.style.transform = 'none'
+            exportNode.style.width = `${width}px`
+            exportNode.style.height = `${height}px`
+            exportNode.style.maxWidth = 'none'
+            exportNode.style.maxHeight = 'none'
 
-            gifshot.createGIF({
-                images: frames,
-                gifWidth: width * 1.5,
-                gifHeight: height * 1.5,
-                interval: 0.15,
-            }, (obj: any) => {
-                if (!obj.error) {
-                    const link = document.createElement('a')
-                    link.download = `${campaign.name || 'post'}-main-post.gif`
-                    link.href = obj.image
-                    link.click()
-                    toast.success('Post downloaded as GIF!')
-                } else {
-                    toast.error('Failed to encode GIF')
+            copyCanvasContent(el, exportNode)
+
+            exportHost.appendChild(exportNode)
+            document.body.appendChild(exportHost)
+
+            try {
+                if ((document as any).fonts?.ready) {
+                    await (document as any).fonts.ready
                 }
-                setDownloadingFormat(null)
-            });
+                await waitForNextPaint()
+
+                const hasFlashAnimation = !!exportNode.querySelector('.scanlogo-flash-overlay')
+                const frameCount = hasFlashAnimation ? 9 : 8
+                const animationDurationMs = hasFlashAnimation ? 4500 : 2200
+                const gifIntervalSeconds = hasFlashAnimation ? 0.5 : 0.2
+                const frames: string[] = []
+
+                for (let i = 0; i < frameCount; i++) {
+                    const progressMs = (i / (frameCount - 1)) * animationDurationMs
+
+                    applyScanLogoAnimationFrame(exportNode, progressMs)
+
+                    if (hasFlashAnimation) {
+                        const progressRatio = animationDurationMs > 0
+                            ? (progressMs % animationDurationMs) / animationDurationMs
+                            : 0
+                        const flashOn =
+                            progressRatio < 0.12 ||
+                            (progressRatio >= 0.32 && progressRatio < 0.44) ||
+                            (progressRatio >= 0.62 && progressRatio < 0.72)
+                        setFlashOverlayState(exportNode, flashOn)
+                    }
+
+                    await waitForNextPaint()
+
+                    const dataUrl = await toPng(exportNode, {
+                        width,
+                        height,
+                        style: {
+                            margin: '0',
+                            transform: 'none',
+                            width: `${width}px`,
+                            height: `${height}px`,
+                        },
+                        pixelRatio: 1,
+                        cacheBust: false,
+                    })
+
+                    frames.push(dataUrl)
+                }
+
+                const gifDataUrl = await new Promise<string>((resolve, reject) => {
+                    let settled = false
+                    const timeoutId = window.setTimeout(() => {
+                        if (settled) return
+                        settled = true
+                        reject(new Error('GIF encoding timed out'))
+                    }, 22000)
+
+                    gifshot.createGIF({
+                        images: frames,
+                        gifWidth: width,
+                        gifHeight: height,
+                        interval: gifIntervalSeconds,
+                        sampleInterval: 15,
+                        numWorkers: 2,
+                    }, (obj: any) => {
+                        if (settled) return
+                        settled = true
+                        window.clearTimeout(timeoutId)
+
+                        if (obj.error || !obj.image) {
+                            reject(new Error(obj.errorMsg || 'Failed to encode GIF'))
+                            return
+                        }
+
+                        resolve(obj.image)
+                    })
+                })
+
+                await triggerDataUrlDownload(gifDataUrl, `${campaign.name || 'post'}-main-post.gif`)
+                toast.success('Post downloaded as GIF!')
+            } finally {
+                exportHost.remove()
+            }
         } catch {
             toast.error('Failed to download post')
+        } finally {
             setDownloadingFormat(null)
         }
     }
@@ -191,21 +385,55 @@ export default function CampaignDetailPage() {
         setDownloadingFormat('png')
         try {
             const el = postRef.current
-            const width = el.offsetWidth
-            const height = el.offsetHeight
-            const dataUrl = await toPng(el, {
-                width: width,
-                height: height,
-                style: {
-                    margin: '0',
-                    transform: 'none',
-                },
-                pixelRatio: 2,
-            })
-            const link = document.createElement('a')
-            link.download = `${campaign.name || 'post'}-main-post.png`
-            link.href = dataUrl
-            link.click()
+            const isCanvasPost = !!campaign.page_design?.elements?.length
+            const nativeCanvas = isCanvasPost ? getCanvasRenderScale(campaign.page_design) : null
+            const width = nativeCanvas?.w || el.offsetWidth
+            const height = nativeCanvas?.h || el.offsetHeight
+            const exportHost = document.createElement('div')
+            exportHost.style.position = 'fixed'
+            exportHost.style.left = '-10000px'
+            exportHost.style.top = '-10000px'
+            exportHost.style.pointerEvents = 'none'
+            exportHost.style.opacity = '0'
+            exportHost.style.zIndex = '-1'
+
+            const exportNode = el.cloneNode(true) as HTMLDivElement
+            exportNode.style.transform = 'none'
+            exportNode.style.width = `${width}px`
+            exportNode.style.height = `${height}px`
+            exportNode.style.maxWidth = 'none'
+            exportNode.style.maxHeight = 'none'
+
+            copyCanvasContent(el, exportNode)
+            setFlashOverlayState(exportNode, false)
+
+            exportHost.appendChild(exportNode)
+            document.body.appendChild(exportHost)
+
+            let dataUrl = ''
+            try {
+                if ((document as any).fonts?.ready) {
+                    await (document as any).fonts.ready
+                }
+                await waitForNextPaint()
+
+                dataUrl = await toPng(exportNode, {
+                    width,
+                    height,
+                    style: {
+                        margin: '0',
+                        transform: 'none',
+                        width: `${width}px`,
+                        height: `${height}px`,
+                    },
+                    pixelRatio: 3,
+                    cacheBust: true,
+                })
+            } finally {
+                exportHost.remove()
+            }
+
+            await triggerDataUrlDownload(dataUrl, `${campaign.name || 'post'}-main-post.png`)
             toast.success('Post downloaded!')
         } catch {
             toast.error('Failed to download post')
@@ -313,9 +541,8 @@ export default function CampaignDetailPage() {
                     /* ─── Render actual canvas design from page_design ─── */
                     (() => {
                         const pd = campaign.page_design
-                        const cw = 1080
-                        const ch = pd.aspectRatio === '1:1' ? 1080 : pd.aspectRatio === '4:5' ? 1350 : 1920
-                        const maxW = 480
+                        const { w: cw, h: ch, scaleX: elementScaleX, scaleY: elementScaleY, fontScale } = getCanvasRenderScale(pd)
+                        const maxW = cw > ch ? 760 : 480
                         const scale = maxW / cw
                         const displayH = ch * scale
                         return (
@@ -327,63 +554,70 @@ export default function CampaignDetailPage() {
                                         transform: `scale(${scale})`,
                                         background: pd.bgImage ? `url(${pd.bgImage}) center/cover` : (pd.bgColor || '#1a1a2e'),
                                     }}>
-                                        {pd.elements.map((el: any) => (
-                                            <div key={el.id} className="absolute" style={{
-                                                left: el.x,
-                                                top: el.y,
-                                                width: el.width,
-                                                height: el.height,
-                                                transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-                                            }}>
-                                                {el.type === 'text' && (
-                                                    <div className="w-full h-full overflow-hidden flex items-center justify-center" style={{
-                                                        fontSize: el.fontSize,
-                                                        fontFamily: el.fontFamily,
-                                                        fontWeight: el.fontWeight as any,
-                                                        fontStyle: el.fontStyle,
-                                                        color: el.textColor,
-                                                        textAlign: el.textAlign as any,
-                                                        lineHeight: 1.3,
-                                                        wordBreak: 'break-word',
-                                                    }}>
-                                                        {el.content}
-                                                    </div>
-                                                )}
-                                                {el.type === 'shape' && (
-                                                    <div className="w-full h-full" style={{
-                                                        backgroundColor: el.bgColor || '#c8401a',
-                                                        borderRadius: el.borderRadius || 0,
-                                                        opacity: el.opacity ?? 1,
-                                                        border: el.borderWidth ? `${el.borderWidth}px solid ${el.borderColor || '#fff'}` : undefined,
-                                                    }} />
-                                                )}
-                                                {el.type === 'image' && (
-                                                    <img src={el.src} alt="" crossOrigin="anonymous" className="w-full h-full pointer-events-none"
-                                                        style={{ objectFit: (el.objectFit || 'cover') as any, borderRadius: el.borderRadius || 0 }} />
-                                                )}
-                                                {el.type === 'qr' && (() => {
-                                                    const logo = (pd.qrScanLogoMap && pd.qrScanLogoMap[el.id] !== undefined)
-                                                        ? scanLogos.find(sl => sl.id == pd.qrScanLogoMap[el.id]) || scanLogos[0]
-                                                        : scanLogos[0];
-                                                    return (
-                                                        <div className="w-full h-full flex items-center justify-center">
-                                                            <ScanLogoPreview
-                                                                url={'https://nowqr.com'}
-                                                                shortUrl={logo?.short_url}
-                                                                shape={logo?.shape || 'shield'}
-                                                                animation={logo?.animation || 'none'}
-                                                                color={logo?.color || primaryColor}
-                                                                ctaText={logo?.cta_text || campaign.cta_button_text || 'SCAN'}
-                                                                safeScanBadge={false}
-                                                                centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
-                                                                size={Math.min(el.width, el.height) - 20}
-                                                                minimal
-                                                            />
+                                        {pd.elements.map((el: any) => {
+                                            const left = (Number(el.x) || 0) * elementScaleX
+                                            const top = (Number(el.y) || 0) * elementScaleY
+                                            const width = (Number(el.width) || 0) * elementScaleX
+                                            const height = (Number(el.height) || 0) * elementScaleY
+                                            const scaledFontSize = el.fontSize ? Math.max(8, Math.round(Number(el.fontSize) * fontScale)) : el.fontSize
+                                            return (
+                                                <div key={el.id} className="absolute" style={{
+                                                    left,
+                                                    top,
+                                                    width,
+                                                    height,
+                                                    transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                                                }}>
+                                                    {el.type === 'text' && (
+                                                        <div className="w-full h-full overflow-hidden flex items-center justify-center" style={{
+                                                            fontSize: scaledFontSize,
+                                                            fontFamily: el.fontFamily,
+                                                            fontWeight: el.fontWeight as any,
+                                                            fontStyle: el.fontStyle,
+                                                            color: el.textColor,
+                                                            textAlign: el.textAlign as any,
+                                                            lineHeight: 1.3,
+                                                            wordBreak: 'break-word',
+                                                        }}>
+                                                            {el.content}
                                                         </div>
-                                                    );
-                                                })()}
-                                            </div>
-                                        ))}
+                                                    )}
+                                                    {el.type === 'shape' && (
+                                                        <div className="w-full h-full" style={{
+                                                            backgroundColor: el.bgColor || '#c8401a',
+                                                            borderRadius: el.borderRadius || 0,
+                                                            opacity: el.opacity ?? 1,
+                                                            border: el.borderWidth ? `${el.borderWidth}px solid ${el.borderColor || '#fff'}` : undefined,
+                                                        }} />
+                                                    )}
+                                                    {el.type === 'image' && (
+                                                        <img src={el.src} alt="" crossOrigin="anonymous" className="w-full h-full pointer-events-none"
+                                                            style={{ objectFit: (el.objectFit || 'cover') as any, borderRadius: el.borderRadius || 0 }} />
+                                                    )}
+                                                    {el.type === 'qr' && (() => {
+                                                        const logo = (pd.qrScanLogoMap && pd.qrScanLogoMap[el.id] !== undefined)
+                                                            ? scanLogos.find(sl => sl.id == pd.qrScanLogoMap[el.id]) || scanLogos[0]
+                                                            : scanLogos[0];
+                                                        return (
+                                                            <div className="w-full h-full flex items-center justify-center">
+                                                                <ScanLogoPreview
+                                                                    url={logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://nowqr.com'}
+                                                                    shortUrl={logo?.short_url}
+                                                                    shape={logo?.shape || 'shield'}
+                                                                    animation={logo?.animation || 'none'}
+                                                                    color={logo?.color || primaryColor}
+                                                                    ctaText={logo?.cta_text || campaign.cta_button_text || 'SCAN'}
+                                                                    safeScanBadge={false}
+                                                                    centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
+                                                                    size={Math.max(24, Math.min(width, height) - 20)}
+                                                                    minimal
+                                                                />
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            )
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -426,7 +660,7 @@ export default function CampaignDetailPage() {
                                 {scanLogos.length > 0 ? (
                                     <div className="mb-4">
                                         <ScanLogoPreview
-                                            url={'https://nowqr.com'}
+                                            url={scanLogos[0].destination_url || scanLogos[0].short_url || campaign.public_url || 'https://nowqr.com'}
                                             shortUrl={scanLogos[0].short_url}
                                             shape={scanLogos[0].shape || 'shield'}
                                             animation={scanLogos[0].animation || 'none'}
@@ -537,7 +771,7 @@ export default function CampaignDetailPage() {
                                     className="flex items-center gap-3 p-2.5 rounded-xl border border-border hover:bg-muted/50 transition-colors">
                                     <div className="w-10 h-10 shrink-0">
                                         <ScanLogoPreview
-                                            url={'https://nowqr.com'}
+                                            url={sl.destination_url || sl.short_url || campaign.public_url || 'https://nowqr.com'}
                                             shortUrl={sl.short_url}
                                             shape={sl.shape || 'shield'}
                                             animation="none"
@@ -616,7 +850,7 @@ export default function CampaignDetailPage() {
                             Additional promotional materials for this campaign ({flyers.length})
                         </p>
                     </div>
-                    <Link to={`/dashboard/campaigns/${campaign.id}/templates`}
+                    <Link to={`/dashboard/campaigns/${campaign.id}/templates?type=flyer`}
                         className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90">
                         <Plus className="w-3.5 h-3.5" /> New Flyer
                     </Link>
@@ -638,8 +872,7 @@ export default function CampaignDetailPage() {
                                     /* Mini canvas preview from canvas_state */
                                     (() => {
                                         const cs = flyer.canvas_state
-                                        const fw = 1080
-                                        const fh = cs.aspectRatio === '1:1' ? 1080 : cs.aspectRatio === '4:5' ? 1350 : 1920
+                                        const { w: fw, h: fh } = getCanvasSize(cs.aspectRatio)
                                         return (
                                             <div className="aspect-[3/4] bg-muted overflow-hidden">
                                                 <div className="relative origin-top-left" style={{
@@ -730,8 +963,7 @@ export default function CampaignDetailPage() {
                 const targetFlyer = flyers.find(f => f.id === downloadingFlyerId.id)
                 if (!targetFlyer || !targetFlyer.canvas_state) return null;
                 const cs = targetFlyer.canvas_state;
-                const fw = 1080
-                const fh = cs.aspectRatio === '1:1' ? 1080 : cs.aspectRatio === '4:5' ? 1350 : 1920
+                const { w: fw, h: fh } = getCanvasSize(cs.aspectRatio)
                 return (
                     <div style={{ position: 'fixed', top: '-10000px', left: '-10000px', pointerEvents: 'none', zIndex: -1 }}>
                         <div ref={flyerExportRef} style={{
@@ -768,7 +1000,7 @@ export default function CampaignDetailPage() {
                                         return (
                                             <div className="w-full h-full flex items-center justify-center">
                                                 <ScanLogoPreview
-                                                    url={'https://nowqr.com'}
+                                                    url={logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://nowqr.com'}
                                                     shortUrl={logo?.short_url} shape={logo?.shape || 'shield'}
                                                     animation={logo?.animation || 'none'} color={logo?.color || primaryColor}
                                                     ctaText={logo?.cta_text || campaign.cta_button_text || 'SCAN'} safeScanBadge={false}

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Loader2, Shield } from 'lucide-react'
 import { QRCode } from 'react-qrcode-logo'
 import '@/components/ScanLogoPreview.css'
+import { getFlashTextLayout, getQrScaleForShape, getScanLogoVisuals } from '@/lib/scanLogoVisuals'
 import axios from 'axios'
 
 interface CampaignPage {
@@ -77,8 +78,11 @@ export default function CampaignPublicPage() {
     const font = campaign.font_family || 'Inter, system-ui, sans-serif'
     const scanLogo = campaign.scan_logos?.[0]
     const size = 200;
-    const isComfortableShape = scanLogo && ['square', 'circle', 'hexagon'].includes(scanLogo.shape);
-    const qrSize = Math.floor(size * (isComfortableShape ? 0.55 : 0.45));
+    const qrSize = Math.floor(size * getQrScaleForShape(scanLogo?.shape));
+    const scanLogoVisuals = scanLogo ? getScanLogoVisuals(scanLogo.color) : null
+    const flashTextLayout = scanLogo
+        ? getFlashTextLayout(scanLogo.shape, size, scanLogo.cta_text || campaign.cta_button_text || 'TAP TO SCAN')
+        : null
     const bgImage = campaign.background_image_path ? `/storage/${campaign.background_image_path}` : null
     const logoUrl = campaign.logo_path ? `/storage/${campaign.logo_path}` : null
 
@@ -149,16 +153,20 @@ export default function CampaignPublicPage() {
                                 justifyContent: 'center',
                                 cursor: 'pointer',
                                 position: 'relative',
-                                '--scanlogo-color': scanLogo.color,
-                                '--scanlogo-glow-color': `${scanLogo.color}66`,
+                                '--scanlogo-color': scanLogoVisuals?.resolvedColor || scanLogo.color,
+                                '--scanlogo-glow-color': scanLogoVisuals?.glowColor || `${scanLogo.color}66`,
+                                '--scanlogo-flash-text-color': scanLogoVisuals?.flashTextColor || '#ffffff',
+                                '--scanlogo-flash-font-size': `${flashTextLayout?.fontSizePx || 14}px`,
+                                '--scanlogo-flash-max-width': `${flashTextLayout?.maxWidthPercent || 68}%`,
+                                '--scanlogo-flash-letter-spacing': `${flashTextLayout?.letterSpacingEm || 0.08}em`,
                             } as React.CSSProperties}
                         >
                             {/* SVG Outline Rendered behind the QR */}
                             <svg
                                 viewBox="0 0 24 24"
                                 className="absolute inset-0 w-full h-full pointer-events-none"
-                                fill={`${scanLogo.color}15`}
-                                stroke={scanLogo.color}
+                                fill={scanLogoVisuals?.shapeFillStrongColor || `${scanLogo.color}15`}
+                                stroke={scanLogoVisuals?.shapeStrokeColor || scanLogo.color}
                                 strokeWidth={3 * 24 / size}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
@@ -170,8 +178,8 @@ export default function CampaignPublicPage() {
                                 <QRCode
                                     value={scanLogo.destination_url || 'https://nowqr.ai'}
                                     size={qrSize}
-                                    bgColor="transparent"
-                                    fgColor={scanLogo.color}
+                                    bgColor={scanLogoVisuals?.qrBgColor || 'transparent'}
+                                    fgColor={scanLogoVisuals?.qrFgColor || scanLogo.color}
                                     qrStyle="dots"
                                     ecLevel="H"
                                     eyeRadius={[
@@ -190,7 +198,17 @@ export default function CampaignPublicPage() {
 
                             {/* Flash overlay: CTA text flashes 3 times then reveals QR */}
                             {scanLogo.animation === 'flash' && (
-                                <div className="scanlogo-flash-overlay flash-lg">
+                                <div className="scanlogo-flash-overlay">
+                                    <svg
+                                        className="scanlogo-flash-shape"
+                                        width="100%"
+                                        height="100%"
+                                        viewBox="0 0 24 24"
+                                        fill={scanLogoVisuals?.resolvedColor || scanLogo.color}
+                                        stroke="none"
+                                    >
+                                        {SHAPE_SVG_PATHS[scanLogo.shape] || SHAPE_SVG_PATHS['square']}
+                                    </svg>
                                     <span className="flash-cta-text">{scanLogo.cta_text || campaign.cta_button_text || 'TAP TO SCAN'}</span>
                                 </div>
                             )}
@@ -200,7 +218,10 @@ export default function CampaignPublicPage() {
                     {/* CTA text */}
                     <p
                         className="text-xs font-extrabold uppercase tracking-[0.15em] mt-4"
-                        style={{ color: scanLogo.color }}
+                        style={{
+                            color: scanLogoVisuals?.labelTextColor || scanLogo.color,
+                            textShadow: scanLogoVisuals?.labelTextShadow || 'none',
+                        }}
                     >
                         {scanLogo.cta_text || campaign.cta_button_text || 'TAP TO SCAN'}
                     </p>

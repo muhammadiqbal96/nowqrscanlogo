@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import {
     ArrowLeft, Download, Type, ImageIcon, QrCode, Square, Trash2,
     Loader2, Copy, Layers, ChevronUp, ChevronDown,
@@ -64,12 +64,54 @@ const CANVAS_SIZES: Record<AspectRatio, { w: number; h: number; label: string }>
 let nextId = 1
 function uid() { return `el_${nextId++}_${Date.now()}` }
 
+function toArray<T = any>(value: unknown): T[] {
+    if (Array.isArray(value)) return value as T[]
+    if (value && typeof value === 'object' && Array.isArray((value as any).data)) {
+        return (value as any).data as T[]
+    }
+    return []
+}
+
+function formatBytes(bytes: number): string {
+    const mb = bytes / (1024 * 1024)
+    return `${mb.toFixed(2)} MB`
+}
+
+function extractApiErrorMessage(error: any, fallback: string): string {
+    if (error?.response?.status === 413) {
+        return 'Upload is too large for server limits. Please try a lighter flyer design.'
+    }
+
+    const message = error?.response?.data?.message
+    if (typeof message === 'string' && message.trim()) return message
+
+    const errors = error?.response?.data?.errors
+    if (errors && typeof errors === 'object') {
+        for (const value of Object.values(errors as Record<string, unknown>)) {
+            if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
+                return value[0]
+            }
+            if (typeof value === 'string' && value.trim()) {
+                return value
+            }
+        }
+    }
+
+    if (typeof error?.message === 'string' && error.message.trim()) {
+        return error.message
+    }
+
+    return fallback
+}
+
 /* ─── Main Component ─────────────────────────────────────────── */
 export default function FlyerEditorPage() {
     const { id } = useParams()
     const navigate = useNavigate()
+    const location = useLocation()
     const [searchParams] = useSearchParams()
     const isFlyerMode = searchParams.get('type') === 'flyer'
+    const templateSessionToken = (location.state as { templateSessionToken?: string } | null)?.templateSessionToken
     const { refreshUser } = useAuth()
     const canvasRef = useRef<HTMLDivElement>(null)
     const canvasWrapRef = useRef<HTMLDivElement>(null)
@@ -77,7 +119,8 @@ export default function FlyerEditorPage() {
     const [campaign, setCampaign] = useState<any>(null)
     const [scanLogos, setScanLogos] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
-    const [exporting, setExporting] = useState(false)
+    const [exportingFormat, setExportingFormat] = useState<'png' | 'jpg' | 'gif' | null>(null)
+    const exporting = exportingFormat !== null
 
     // Canvas state
     const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16')
@@ -108,68 +151,85 @@ export default function FlyerEditorPage() {
 
     /* ─── Load campaign data ─────────────────────────────────── */
     useEffect(() => {
-        (async () => {
-            try {
-                const [campRes, logosRes] = await Promise.all([
-                    campaignApi.get(Number(id)),
-                    scanLogoApi.list(),
-                ])
-                const camp = campRes.data.campaign
-                setCampaign(camp)
+        let isActive = true
 
-                // Merge campaign.scan_logos with logosRes.data.data to ensure we have all referenced logos
-                const allLogos = [...(camp.scan_logos || [])];
-                (logosRes.data.data || []).forEach((lg: any) => {
-                    if (!allLogos.find(x => x.id === lg.id)) {
-                        allLogos.push(lg);
-                    }
-                });
-                setScanLogos(allLogos)
+            ; (async () => {
+                try {
+                    const [campRes, logosRes] = await Promise.all([
+                        campaignApi.get(Number(id)),
+                        scanLogoApi.list(),
+                    ])
+                    if (!isActive) return
 
-                // Restore saved canvas state, or populate fresh from campaign data
-                // In flyer mode, prefer sessionStorage canvas from template selection
-                const sessionKey = `flyer_canvas_${camp.id}`
-                const sessionCanvas = isFlyerMode ? sessionStorage.getItem(sessionKey) : null
+                    const camp = campRes.data.campaign
+                    setCampaign(camp)
 
-                if (sessionCanvas) {
-                    try {
-                        const parsed = JSON.parse(sessionCanvas)
-                        if (parsed.elements?.length) {
-                            setElements(parsed.elements)
-                            if (parsed.bgColor) setBgColor(parsed.bgColor)
-                            if (parsed.bgImage) setBgImage(parsed.bgImage)
-                            if (parsed.bgTemplate !== undefined) setBgTemplate(parsed.bgTemplate)
-                            if (parsed.aspectRatio) setAspectRatio(parsed.aspectRatio as AspectRatio)
-                            if (parsed.qrScanLogoMap) setQrScanLogoMap(parsed.qrScanLogoMap)
+                    // Merge campaign.scan_logos with scan logos list while handling both paginated and plain-array API payloads.
+                    const campaignLogos = toArray<any>(camp.scan_logos)
+                    const listedLogos = toArray<any>(logosRes.data?.data ?? logosRes.data)
+                    const allLogos = [...campaignLogos]
+                    listedLogos.forEach((lg: any) => {
+                        if (!lg?.id) return
+                        if (!allLogos.find(x => x?.id === lg.id)) {
+                            allLogos.push(lg)
+                        }
+                    })
+                    setScanLogos(allLogos)
+
+                    // Restore saved canvas state, or populate fresh from campaign data
+                    // In flyer mode, prefer sessionStorage canvas from template selection
+                    const sessionKey = `flyer_canvas_${camp.id}`
+                    const sessionCanvas = isFlyerMode ? sessionStorage.getItem(sessionKey) : null
+                    const shouldUseSessionCanvas = Boolean(isFlyerMode && templateSessionToken && sessionCanvas)
+
+                    if (shouldUseSessionCanvas && sessionCanvas) {
+                        try {
+                            const parsed = JSON.parse(sessionCanvas)
+                            const parsedToken = typeof parsed?._templateSessionToken === 'string'
+                                ? parsed._templateSessionToken
+                                : null
+
+                            if (parsedToken && parsedToken !== templateSessionToken) {
+                                populateFromCampaign(camp)
+                            } else if (parsed.elements?.length) {
+                                setElements(parsed.elements)
+                                if (parsed.bgColor) setBgColor(parsed.bgColor)
+                                if (parsed.bgImage) setBgImage(parsed.bgImage)
+                                if (parsed.bgTemplate !== undefined) setBgTemplate(parsed.bgTemplate)
+                                if (parsed.aspectRatio) setAspectRatio(parsed.aspectRatio as AspectRatio)
+                                if (parsed.qrScanLogoMap) setQrScanLogoMap(parsed.qrScanLogoMap)
+                            } else {
+                                populateFromCampaign(camp)
+                            }
+                        } catch {
+                            populateFromCampaign(camp)
+                        }
+                    } else {
+                        const design = camp.page_design
+                        if (!isFlyerMode && design && design.elements && design.elements.length > 0) {
+                            setElements(design.elements)
+                            if (design.bgColor) setBgColor(design.bgColor)
+                            if (design.bgImage) setBgImage(design.bgImage)
+                            if (design.bgTemplate !== undefined) setBgTemplate(design.bgTemplate)
+                            if (design.aspectRatio) setAspectRatio(design.aspectRatio as AspectRatio)
+                            if (design.qrScanLogoMap) setQrScanLogoMap(design.qrScanLogoMap)
                         } else {
                             populateFromCampaign(camp)
                         }
-                    } catch {
-                        populateFromCampaign(camp)
                     }
-                    // Clean up sessionStorage after loading
-                    sessionStorage.removeItem(sessionKey)
-                } else {
-                    const design = camp.page_design
-                    if (!isFlyerMode && design && design.elements && design.elements.length > 0) {
-                        setElements(design.elements)
-                        if (design.bgColor) setBgColor(design.bgColor)
-                        if (design.bgImage) setBgImage(design.bgImage)
-                        if (design.bgTemplate !== undefined) setBgTemplate(design.bgTemplate)
-                        if (design.aspectRatio) setAspectRatio(design.aspectRatio as AspectRatio)
-                        if (design.qrScanLogoMap) setQrScanLogoMap(design.qrScanLogoMap)
-                    } else {
-                        populateFromCampaign(camp)
-                    }
+                } catch {
+                    if (!isActive) return
+                    toast.error('Failed to load campaign')
+                    navigate('/dashboard/campaigns')
+                } finally {
+                    if (isActive) setLoading(false)
                 }
-            } catch {
-                toast.error('Failed to load campaign')
-                navigate('/dashboard/campaigns')
-            } finally {
-                setLoading(false)
-            }
-        })()
-    }, [id])
+            })()
+
+        return () => {
+            isActive = false
+        }
+    }, [id, isFlyerMode, navigate, templateSessionToken])
 
     /* ─── Recalculate scale on resize ────────────────────────── */
     useEffect(() => {
@@ -186,27 +246,23 @@ export default function FlyerEditorPage() {
         return () => window.removeEventListener('resize', recalc)
     }, [canvasSize])
 
-    /* ─── Rescale elements when aspect ratio changes ─────────── */
+    /* ─── Remap elements when aspect ratio changes ───────────── */
     useEffect(() => {
         const prev = prevCanvasSizeRef.current
         if (prev.w === canvasSize.w && prev.h === canvasSize.h) return
 
-        // Use uniform scale to maintain the design aspect ratio
+        // Scale each axis independently so content fills the new ratio
         const scaleX = canvasSize.w / prev.w
         const scaleY = canvasSize.h / prev.h
-        const scale = Math.min(scaleX, scaleY)
-
-        // Center the scaled elements within the new canvas dimensions
-        const offsetX = (canvasSize.w - prev.w * scale) / 2
-        const offsetY = (canvasSize.h - prev.h * scale) / 2
+        const fontScale = (scaleX + scaleY) / 2
 
         setElements(els => els.map(el => ({
             ...el,
-            x: Math.round(el.x * scale + offsetX),
-            y: Math.round(el.y * scale + offsetY),
-            width: Math.round(el.width * scale),
-            height: Math.round(el.height * scale),
-            fontSize: el.fontSize ? Math.round(el.fontSize * scale) : el.fontSize,
+            x: Math.round(el.x * scaleX),
+            y: Math.round(el.y * scaleY),
+            width: Math.round(el.width * scaleX),
+            height: Math.round(el.height * scaleY),
+            fontSize: el.fontSize ? Math.max(8, Math.round(el.fontSize * fontScale)) : el.fontSize,
         })))
         prevCanvasSizeRef.current = canvasSize
     }, [canvasSize])
@@ -521,7 +577,7 @@ export default function FlyerEditorPage() {
 
     const exportFlyer = async (format: 'png' | 'jpg' | 'gif') => {
         if (!canvasRef.current) return
-        setExporting(true)
+        setExportingFormat(format)
         setSelectedId(null)  // hide selection handles
 
         // Wait for re-render without selection borders
@@ -529,7 +585,7 @@ export default function FlyerEditorPage() {
 
         try {
             if (format === 'gif') {
-                const frames: string[] = [];
+                const frames: string[] = []
                 for (let i = 0; i < 10; i++) {
                     const dataUrl = await toPng(canvasRef.current, {
                         width: canvasSize.w,
@@ -538,28 +594,31 @@ export default function FlyerEditorPage() {
                         pixelRatio: 1,
                         cacheBust: true,
                     })
-                    frames.push(dataUrl);
-                    await new Promise(r => setTimeout(r, 150));
+                    frames.push(dataUrl)
+                    await new Promise(r => setTimeout(r, 150))
                 }
 
-                gifshot.createGIF({
-                    images: frames,
-                    gifWidth: canvasSize.w,
-                    gifHeight: canvasSize.h,
-                    interval: 0.15,
-                }, (obj: any) => {
-                    if (!obj.error) {
-                        const link = document.createElement('a')
-                        link.download = `${campaign?.name || 'flyer'}-${canvasSize.label.replace(/\s/g, '-')}.gif`
-                        link.href = obj.image
-                        link.click()
-                        toast.success(`Flyer downloaded as GIF!`)
-                    } else {
-                        toast.error('Failed to encode GIF')
-                    }
-                    setExporting(false)
-                });
-                return;
+                const gifDataUrl = await new Promise<string>((resolve, reject) => {
+                    gifshot.createGIF({
+                        images: frames,
+                        gifWidth: canvasSize.w,
+                        gifHeight: canvasSize.h,
+                        interval: 0.15,
+                    }, (obj: any) => {
+                        if (!obj.error) {
+                            resolve(obj.image)
+                        } else {
+                            reject(new Error(obj.errorMsg || 'Failed to encode GIF'))
+                        }
+                    })
+                })
+
+                const link = document.createElement('a')
+                link.download = `${campaign?.name || 'flyer'}-${canvasSize.label.replace(/\s/g, '-')}.gif`
+                link.href = gifDataUrl
+                link.click()
+                toast.success('Flyer downloaded as GIF!')
+                return
             }
 
             const exportFn = format === 'png' ? toPng : toJpeg
@@ -571,8 +630,9 @@ export default function FlyerEditorPage() {
                     width: `${canvasSize.w}px`,
                     height: `${canvasSize.h}px`,
                 },
-                pixelRatio: 1,
+                pixelRatio: 2,
                 quality: 0.95,
+                cacheBust: true,
             })
             const link = document.createElement('a')
             link.download = `${campaign?.name || 'flyer'}-${canvasSize.label.replace(/\s/g, '-')}.${format}`
@@ -590,7 +650,7 @@ export default function FlyerEditorPage() {
             console.error(err)
             toast.error('Export failed. Try again.')
         } finally {
-            setExporting(false)
+            setExportingFormat(null)
         }
     }
 
@@ -603,20 +663,57 @@ export default function FlyerEditorPage() {
 
         try {
             if (isFlyerMode) {
-                // Flyer mode — export image and create a flyer record
-                const dataUrl = await toPng(canvasRef.current, {
-                    width: canvasSize.w,
-                    height: canvasSize.h,
-                    style: { transform: 'none', width: `${canvasSize.w}px`, height: `${canvasSize.h}px` },
-                    pixelRatio: 1,
-                })
-                const res = await fetch(dataUrl)
-                const blob = await res.blob()
-                const file = new File([blob], `flyer-${Date.now()}.png`, { type: 'image/png' })
+                // Keep upload under common PHP limits (2 MB default) by progressively reducing JPEG quality.
+                const maxUploadBytes = Math.floor(1.9 * 1024 * 1024)
+                const variants = [
+                    { pixelRatio: 1.15, quality: 0.9 },
+                    { pixelRatio: 1, quality: 0.85 },
+                    { pixelRatio: 1, quality: 0.78 },
+                    { pixelRatio: 1, quality: 0.7 },
+                ]
+
+                let uploadFile: File | null = null
+                let smallestFile: File | null = null
+
+                for (const variant of variants) {
+                    const dataUrl = await toJpeg(canvasRef.current, {
+                        width: canvasSize.w,
+                        height: canvasSize.h,
+                        style: { transform: 'none', width: `${canvasSize.w}px`, height: `${canvasSize.h}px` },
+                        pixelRatio: variant.pixelRatio,
+                        quality: variant.quality,
+                        cacheBust: true,
+                    })
+                    const res = await fetch(dataUrl)
+                    const blob = await res.blob()
+                    const candidate = new File([blob], `flyer-${Date.now()}.jpg`, { type: 'image/jpeg' })
+
+                    if (!smallestFile || candidate.size < smallestFile.size) {
+                        smallestFile = candidate
+                    }
+
+                    if (candidate.size <= maxUploadBytes) {
+                        uploadFile = candidate
+                        break
+                    }
+                }
+
+                if (!uploadFile) {
+                    uploadFile = smallestFile
+                }
+
+                if (!uploadFile) {
+                    throw new Error('Unable to generate flyer image for upload')
+                }
+
+                if (uploadFile.size > maxUploadBytes) {
+                    toast.error(`Flyer image is too large to upload (${formatBytes(uploadFile.size)}).`)
+                    return
+                }
 
                 await campaignApi.storeFlyer(campaign.id, {
                     title: `${campaign.name} — ${canvasSize.label}`,
-                    image: file,
+                    image: uploadFile,
                     canvas_state: JSON.stringify({ elements, bgColor, bgImage, bgTemplate, aspectRatio }),
                 })
                 toast.success('Flyer saved to campaign!')
@@ -627,9 +724,9 @@ export default function FlyerEditorPage() {
                 })
                 toast.success('Design saved!')
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error(err)
-            toast.error('Failed to save')
+            toast.error(extractApiErrorMessage(err, 'Failed to save'))
         } finally {
             setSaving(false)
         }
@@ -710,7 +807,7 @@ export default function FlyerEditorPage() {
                         disabled={exporting || saving}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
                     >
-                        {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                        {exportingFormat === 'png' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                         PNG
                     </button>
                     <button
@@ -718,6 +815,7 @@ export default function FlyerEditorPage() {
                         disabled={exporting || saving}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-lg text-xs font-medium hover:bg-muted/80 disabled:opacity-50"
                     >
+                        {exportingFormat === 'jpg' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                         JPG
                     </button>
                     <button
@@ -725,6 +823,7 @@ export default function FlyerEditorPage() {
                         disabled={exporting || saving}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-lg text-xs font-medium hover:bg-muted/80 disabled:opacity-50"
                     >
+                        {exportingFormat === 'gif' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                         GIF
                     </button>
                 </div>
@@ -920,7 +1019,7 @@ export default function FlyerEditorPage() {
                                         return (
                                             <div className="w-full h-full flex items-center justify-center">
                                                 <ScanLogoPreview
-                                                    url={'https://nowqr.com'}
+                                                    url={logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://nowqr.com'}
                                                     shortUrl={logo?.short_url}
                                                     shape={logo?.shape || 'shield'}
                                                     animation={logo?.animation || 'none'}

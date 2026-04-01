@@ -18,6 +18,7 @@ export default function ScanLogoDetailPage() {
     const [editing, setEditing] = useState(false)
     const [destinationUrl, setDestinationUrl] = useState('')
     const [saving, setSaving] = useState(false)
+    const [downloadingFormat, setDownloadingFormat] = useState<'png' | 'jpg' | 'gif' | null>(null)
 
     // Logo upload for center
     const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -75,6 +76,30 @@ export default function ScanLogoDetailPage() {
             toast.error('Failed to upload logo')
         } finally {
             setUploadingLogo(false)
+        }
+    }
+
+    const handleDownload = async (format: 'png' | 'jpg' | 'gif') => {
+        if (!qrPreviewRef.current || downloadingFormat) return
+
+        setDownloadingFormat(format)
+
+        try {
+            if (format === 'png') {
+                await qrPreviewRef.current.downloadPNG()
+                return
+            }
+
+            if (format === 'jpg') {
+                await qrPreviewRef.current.downloadJPG()
+                return
+            }
+
+            await qrPreviewRef.current.downloadGIF()
+        } catch {
+            toast.error(`Failed to download ${format.toUpperCase()}`)
+        } finally {
+            setDownloadingFormat(null)
         }
     }
 
@@ -198,7 +223,7 @@ export default function ScanLogoDetailPage() {
                             safeScanBadge={scanLogo.safe_scan_badge}
                             centerLogoUrl={scanLogo.center_logo_path ? `/storage/${scanLogo.center_logo_path}` : null}
                             shortUrl={scanLogo.short_url}
-                            size={140}
+                            size={180}
                         />
 
                         {/* Change logo */}
@@ -215,22 +240,25 @@ export default function ScanLogoDetailPage() {
                             <p className="text-xs text-muted-foreground text-center">Download</p>
                             <div className="grid grid-cols-3 gap-2">
                                 <button
-                                    onClick={() => qrPreviewRef.current?.downloadPNG()}
-                                    className="flex items-center justify-center gap-1 py-2 bg-muted hover:bg-muted/80 rounded-lg text-xs font-medium transition-colors"
+                                    onClick={() => handleDownload('png')}
+                                    disabled={downloadingFormat !== null}
+                                    className="flex items-center justify-center gap-1 py-2 bg-muted hover:bg-muted/80 rounded-lg text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
-                                    <Download className="w-3 h-3" /> PNG
+                                    {downloadingFormat === 'png' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} PNG
                                 </button>
                                 <button
-                                    onClick={() => qrPreviewRef.current?.downloadJPG()}
-                                    className="flex items-center justify-center gap-1 py-2 bg-muted hover:bg-muted/80 rounded-lg text-xs font-medium transition-colors"
+                                    onClick={() => handleDownload('jpg')}
+                                    disabled={downloadingFormat !== null}
+                                    className="flex items-center justify-center gap-1 py-2 bg-muted hover:bg-muted/80 rounded-lg text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
-                                    <Download className="w-3 h-3" /> JPG
+                                    {downloadingFormat === 'jpg' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} JPG
                                 </button>
                                 <button
-                                    onClick={() => qrPreviewRef.current?.downloadGIF()}
-                                    className="flex items-center justify-center gap-1 py-2 bg-muted hover:bg-muted/80 rounded-lg text-xs font-medium transition-colors"
+                                    onClick={() => handleDownload('gif')}
+                                    disabled={downloadingFormat !== null}
+                                    className="flex items-center justify-center gap-1 py-2 bg-muted hover:bg-muted/80 rounded-lg text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
-                                    <Download className="w-3 h-3" /> GIF
+                                    {downloadingFormat === 'gif' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} GIF
                                 </button>
                             </div>
                         </div>

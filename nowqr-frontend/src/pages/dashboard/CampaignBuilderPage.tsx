@@ -223,7 +223,7 @@ export default function CampaignBuilderPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium mb-1.5">Who is your target audience? <span className="text-muted-foreground">(optional)</span></label>
+                            <label className="block text-sm font-medium mb-1.5">Who is your target audience?</label>
                             <input
                                 type="text"
                                 placeholder="e.g., Brides-to-be, event planners, gift buyers in Austin TX"

@@ -688,6 +688,14 @@ export default function TemplateSelectionPage() {
     const [searchQuery, setSearchQuery] = useState('')
     const [hoveredId, setHoveredId] = useState<string | null>(null)
 
+    const normalizeList = (value: unknown): any[] => {
+        if (Array.isArray(value)) return value
+        if (value && typeof value === 'object' && Array.isArray((value as any).data)) {
+            return (value as any).data
+        }
+        return []
+    }
+
     /* ─── Load campaign ─── */
     useEffect(() => {
         if (!id) return
@@ -699,7 +707,7 @@ export default function TemplateSelectionPage() {
                     ])
                     const camp = campRes.data.campaign
                     setCampaign(camp)
-                    setScanLogos(logosRes.data.data || [])
+                    setScanLogos(normalizeList(logosRes.data?.data ?? logosRes.data))
 
                     // For campaign flow (not flyer), pre-fill AI content from campaign
                     if (!isFlyer && camp.headline) {
@@ -787,9 +795,15 @@ export default function TemplateSelectionPage() {
 
             if (isFlyer) {
                 // Store canvas state in sessionStorage for the editor to pick up
-                sessionStorage.setItem(`flyer_canvas_${campaign.id}`, JSON.stringify(canvasState))
+                const templateSessionToken = `${Date.now()}_${Math.random().toString(36).slice(2)}`
+                sessionStorage.setItem(
+                    `flyer_canvas_${campaign.id}`,
+                    JSON.stringify({ ...canvasState, _templateSessionToken: templateSessionToken })
+                )
                 toast.success('Template applied! Opening editor...')
-                navigate(`/dashboard/campaigns/${campaign.id}/flyer?type=flyer`)
+                navigate(`/dashboard/campaigns/${campaign.id}/flyer?type=flyer`, {
+                    state: { templateSessionToken },
+                })
             } else {
                 // Campaign post flow — save to campaign's page_design
                 await campaignApi.update(campaign.id, {

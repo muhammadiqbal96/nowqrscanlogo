@@ -34,7 +34,7 @@ class ScanLogoController extends Controller
             'campaign_id' => ['nullable', 'exists:campaigns,id'],
             'destination_url' => ['required', 'url', 'max:2048'],
             'shape' => ['sometimes', 'in:shield,circle,gear,eye,diamond,hexagon,square'],
-            'animation' => ['sometimes', 'in:spin,pulse,expand,bounce,glow,none'],
+            'animation' => ['sometimes', 'in:spin,pulse,expand,bounce,glow,flash,none'],
             'color' => ['sometimes', 'string', 'max:20'],
             'cta_text' => ['sometimes', 'string', 'max:50'],
             'safe_scan_badge' => ['sometimes', 'boolean'],
@@ -97,7 +97,7 @@ class ScanLogoController extends Controller
         $validated = $request->validate([
             'destination_url' => ['sometimes', 'url', 'max:2048'],
             'shape' => ['sometimes', 'in:shield,circle,gear,eye,diamond,hexagon,square'],
-            'animation' => ['sometimes', 'in:spin,pulse,expand,bounce,glow,none'],
+            'animation' => ['sometimes', 'in:spin,pulse,expand,bounce,glow,flash,none'],
             'color' => ['sometimes', 'string', 'max:20'],
             'cta_text' => ['sometimes', 'string', 'max:50'],
             'safe_scan_badge' => ['sometimes', 'boolean'],
@@ -182,6 +182,7 @@ class ScanLogoController extends Controller
                 ['value' => 'expand', 'label' => 'Expand', 'description' => 'Grows then shrinks'],
                 ['value' => 'bounce', 'label' => 'Bounce', 'description' => 'Bounces up and down'],
                 ['value' => 'glow', 'label' => 'Glow', 'description' => 'Glows with a halo effect'],
+                ['value' => 'flash', 'label' => 'Flash', 'description' => 'CTA flashes into QR'],
                 ['value' => 'none', 'label' => 'None', 'description' => 'No animation'],
             ],
         ]);

@@ -11,6 +11,11 @@
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.12em;
+    color: var(--scanlogo-label-text-light, #0f172a);
+}
+
+.dark .scanlogo-cta-text {
+    color: var(--scanlogo-label-text-dark, #e2e8f0);
 }
 
 .scanlogo-short-url {
@@ -113,19 +118,26 @@
 
 /* ─── Glow ─────────────────────────────────────────────────── */
 .scanlogo-anim-glow {
-    animation: scanlogo-glow 2.5s ease-in-out infinite;
+    animation: none;
 }
 
-@keyframes scanlogo-glow {
+.scanlogo-shape {
+    overflow: visible;
+}
+
+.scanlogo-shape-glow {
+    animation: scanlogo-shape-glow 2.5s ease-in-out infinite;
+}
+
+@keyframes scanlogo-shape-glow {
 
     0%,
     100% {
-        box-shadow: 0 0 8px 2px var(--scanlogo-glow-color, rgba(200, 64, 26, 0.4));
+        filter: drop-shadow(0 0 6px var(--scanlogo-glow-color, rgba(200, 64, 26, 0.45)));
     }
 
     50% {
-        box-shadow: 0 0 24px 8px var(--scanlogo-glow-color, rgba(200, 64, 26, 0.4)),
-            0 0 48px 16px var(--scanlogo-glow-color, rgba(200, 64, 26, 0.2));
+        filter: drop-shadow(0 0 14px var(--scanlogo-glow-color, rgba(200, 64, 26, 0.45))) drop-shadow(0 0 28px var(--scanlogo-glow-color, rgba(200, 64, 26, 0.28)));
     }
 }
 
@@ -135,7 +147,7 @@
 }
 
 /* ─── Flash (ScanLogo ↔ QR code) ───────────────────────────── */
-/* Overlay flashes 3 times showing CTA text, then stays hidden to reveal QR */
+/* Overlay flashes in a looping sequence so the animation stays active. */
 .scanlogo-anim-flash {
     animation: none;
 }
@@ -146,36 +158,35 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--scanlogo-color, #c8401a);
-    border-radius: inherit;
     z-index: 2;
-    animation: scanlogo-flash-sequence 4.5s ease-in-out forwards;
+    animation: scanlogo-flash-sequence 4.5s steps(1, end) infinite;
     pointer-events: none;
 }
 
+.scanlogo-flash-shape {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
 .scanlogo-flash-overlay .flash-cta-text {
-    color: #ffffff;
+    color: var(--scanlogo-flash-text-color, #ffffff);
     font-weight: 800;
-    font-size: 14px;
+    font-size: var(--scanlogo-flash-font-size, 14px);
     text-transform: uppercase;
-    letter-spacing: 0.12em;
+    letter-spacing: var(--scanlogo-flash-letter-spacing, 0.08em);
     text-align: center;
-    line-height: 1.3;
-    padding: 4px 8px;
+    line-height: 1.1;
+    display: block;
+    width: var(--scanlogo-flash-max-width, 68%);
+    max-width: var(--scanlogo-flash-max-width, 68%);
+    padding: 4px 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
     word-break: break-word;
-}
-
-/* Scale flash text to container size */
-.scanlogo-flash-overlay.flash-sm .flash-cta-text {
-    font-size: 8px;
-}
-
-.scanlogo-flash-overlay.flash-md .flash-cta-text {
-    font-size: 12px;
-}
-
-.scanlogo-flash-overlay.flash-lg .flash-cta-text {
-    font-size: 18px;
+    position: relative;
+    z-index: 1;
 }
 
 @keyframes scanlogo-flash-sequence {

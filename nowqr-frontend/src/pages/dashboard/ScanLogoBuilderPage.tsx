@@ -68,7 +68,7 @@ export default function ScanLogoBuilderPage() {
                 campaign_id: campaignId ? Number(campaignId) : undefined,
                 destination_url: destinationUrl,
                 shape, animation, color,
-                cta_text: ctaText,
+                cta_text: ctaText.trim() || 'TAP TO SCAN',
                 safe_scan_badge: safeScanBadge,
             })
 
