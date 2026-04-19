@@ -200,7 +200,11 @@ export default function FlyerEditorPage() {
                                 if (parsed.bgColor) setBgColor(parsed.bgColor)
                                 if (parsed.bgImage) setBgImage(parsed.bgImage)
                                 if (parsed.bgTemplate !== undefined) setBgTemplate(parsed.bgTemplate)
-                                if (parsed.aspectRatio) setAspectRatio(parsed.aspectRatio as AspectRatio)
+                                if (parsed.aspectRatio) {
+                                    setAspectRatio(parsed.aspectRatio as AspectRatio)
+                                    const savedSize = CANVAS_SIZES[parsed.aspectRatio as AspectRatio]
+                                    if (savedSize) prevCanvasSizeRef.current = savedSize
+                                }
                                 if (parsed.qrScanLogoMap) setQrScanLogoMap(parsed.qrScanLogoMap)
                             } else {
                                 populateFromCampaign(camp)
@@ -215,7 +219,15 @@ export default function FlyerEditorPage() {
                             if (design.bgColor) setBgColor(design.bgColor)
                             if (design.bgImage) setBgImage(design.bgImage)
                             if (design.bgTemplate !== undefined) setBgTemplate(design.bgTemplate)
-                            if (design.aspectRatio) setAspectRatio(design.aspectRatio as AspectRatio)
+                            if (design.aspectRatio) {
+                                setAspectRatio(design.aspectRatio as AspectRatio)
+                                // Sync the ref so the remap effect doesn't rescale elements
+                                // that were already saved in this ratio's coordinate space.
+                                const savedSize = CANVAS_SIZES[design.aspectRatio as AspectRatio]
+                                if (savedSize) {
+                                    prevCanvasSizeRef.current = savedSize
+                                }
+                            }
                             if (design.qrScanLogoMap) setQrScanLogoMap(design.qrScanLogoMap)
                         } else {
                             populateFromCampaign(camp)
