@@ -104,9 +104,7 @@ const setFlashOverlayState = (root: HTMLElement, visible: boolean) => {
 }
 
 const applyScanLogoAnimationFrame = (root: HTMLElement, progressMs: number) => {
-    const animatedNodes = root.querySelectorAll<HTMLElement>(
-        '.scanlogo-flash-overlay, .scanlogo-anim-spin, .scanlogo-anim-pulse, .scanlogo-anim-bounce, .scanlogo-anim-expand, .scanlogo-shape-glow'
-    )
+    const animatedNodes = root.querySelectorAll<HTMLElement>('.scanlogo-animation-node')
 
     animatedNodes.forEach((node) => {
         const computed = window.getComputedStyle(node)
@@ -461,21 +459,21 @@ export default function CampaignDetailPage() {
     const fontFamily = campaign.font_family || 'Inter'
 
     return (
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto w-full min-w-0">
             {/* Header */}
             <div className="mb-8">
                 <button onClick={() => navigate('/dashboard/campaigns')} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4">
                     <ArrowLeft className="w-4 h-4" /> Back to Campaigns
                 </button>
 
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex items-center gap-4 min-w-0">
                         <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${primaryColor}15` }}>
                             <Megaphone className="w-7 h-7" style={{ color: primaryColor }} />
                         </div>
-                        <div>
-                            <h1 className="text-2xl font-bold">{campaign.name}</h1>
-                            <div className="flex items-center gap-3 mt-1">
+                        <div className="min-w-0">
+                            <h1 className="text-2xl font-bold break-words">{campaign.name}</h1>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                                 <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full capitalize border ${statusColor(campaign.status)}`}>
                                     {campaign.status}
                                 </span>
@@ -488,7 +486,7 @@ export default function CampaignDetailPage() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                         {campaign.is_published && campaign.public_url && (
                             <a href={campaign.public_url} target="_blank" rel="noopener noreferrer"
                                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border border-border hover:bg-muted transition-colors">
@@ -509,9 +507,9 @@ export default function CampaignDetailPage() {
 
             {/* ─── Main Post Preview — Full Width ─── */}
             <div className="mb-10">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
                     <h2 className="text-lg font-bold">Main Post</h2>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                         <div className="flex bg-card border border-border rounded-lg overflow-hidden disabled:opacity-40">
                             <button
                                 onClick={handleDownloadPost}
@@ -542,12 +540,13 @@ export default function CampaignDetailPage() {
                     (() => {
                         const pd = campaign.page_design
                         const { w: cw, h: ch, scaleX: elementScaleX, scaleY: elementScaleY, fontScale } = getCanvasRenderScale(pd)
-                        const maxW = cw > ch ? 760 : 480
-                        const scale = maxW / cw
+                        const previewWidth = cw > ch ? 760 : 480
+                        const scale = previewWidth / cw
                         const displayH = ch * scale
                         return (
-                            <div className="flex justify-center">
-                                <div className="rounded-2xl overflow-hidden shadow-lg border border-border" style={{ width: maxW, height: displayH }}>
+                            <div className="w-full overflow-x-auto pb-2">
+                                <div className="mx-auto" style={{ width: previewWidth, minWidth: previewWidth }}>
+                                    <div className="rounded-2xl overflow-hidden shadow-lg border border-border" style={{ width: previewWidth, height: displayH }}>
                                     <div ref={postRef} className="relative origin-top-left" style={{
                                         width: cw,
                                         height: ch,
@@ -559,7 +558,7 @@ export default function CampaignDetailPage() {
                                             const top = (Number(el.y) || 0) * elementScaleY
                                             const width = (Number(el.width) || 0) * elementScaleX
                                             const height = (Number(el.height) || 0) * elementScaleY
-                                            const scaledFontSize = el.fontSize ? Math.max(8, Math.round(Number(el.fontSize) * fontScale)) : el.fontSize
+                                            const scaledFontSize = el.fontSize ? Math.max(12, Math.round(Number(el.fontSize) * fontScale)) : el.fontSize
                                             return (
                                                 <div key={el.id} className="absolute" style={{
                                                     left,
@@ -606,6 +605,7 @@ export default function CampaignDetailPage() {
                                                                     shape={logo?.shape || 'shield'}
                                                                     animation={logo?.animation || 'none'}
                                                                     color={logo?.color || primaryColor}
+                                                                    wrapperColor={logo?.wrapper_color || logo?.color || primaryColor}
                                                                     ctaText={logo?.cta_text || campaign.cta_button_text || 'SCAN'}
                                                                     safeScanBadge={false}
                                                                     centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
@@ -620,12 +620,14 @@ export default function CampaignDetailPage() {
                                         })}
                                     </div>
                                 </div>
+                                </div>
                             </div>
                         )
                     })()
                 ) : campaign.headline ? (
-                    <div className="flex justify-center">
-                        <div ref={postRef} className="bg-card border border-border rounded-2xl overflow-hidden shadow-lg w-full" style={{ fontFamily, maxWidth: 672 }}>
+                    <div className="w-full overflow-x-auto pb-2">
+                        <div className="mx-auto" style={{ width: 672, minWidth: 672 }}>
+                            <div ref={postRef} className="bg-card border border-border rounded-2xl overflow-hidden shadow-lg w-full" style={{ fontFamily }}>
                             <div className="flex flex-col items-center justify-between px-10 py-10 text-center relative min-h-[500px]"
                                 style={{ background: `linear-gradient(160deg, ${primaryColor}, ${primaryColor}cc 60%, #1e1b4b)` }}>
 
@@ -665,6 +667,7 @@ export default function CampaignDetailPage() {
                                             shape={scanLogos[0].shape || 'shield'}
                                             animation={scanLogos[0].animation || 'none'}
                                             color={scanLogos[0].color || primaryColor}
+                                            wrapperColor={scanLogos[0].wrapper_color || scanLogos[0].color || primaryColor}
                                             ctaText={scanLogos[0].cta_text || campaign.cta_button_text || 'SCAN'}
                                             safeScanBadge={false}
                                             centerLogoUrl={scanLogos[0].center_logo_path ? `/storage/${scanLogos[0].center_logo_path}` : null}
@@ -694,6 +697,7 @@ export default function CampaignDetailPage() {
                                 {/* Bottom decorative line */}
                                 <div className="w-12 h-1 rounded-full mt-6" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }} />
                             </div>
+                        </div>
                         </div>
                     </div>
                 ) : (
@@ -776,6 +780,7 @@ export default function CampaignDetailPage() {
                                             shape={sl.shape || 'shield'}
                                             animation="none"
                                             color={sl.color || primaryColor}
+                                            wrapperColor={sl.wrapper_color || sl.color || primaryColor}
                                             ctaText={sl.cta_text || 'SCAN'}
                                             safeScanBadge={false}
                                             centerLogoUrl={sl.center_logo_path ? `/storage/${sl.center_logo_path}` : null}
@@ -1003,6 +1008,7 @@ export default function CampaignDetailPage() {
                                                     url={logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://nowqr.com'}
                                                     shortUrl={logo?.short_url} shape={logo?.shape || 'shield'}
                                                     animation={logo?.animation || 'none'} color={logo?.color || primaryColor}
+                                                    wrapperColor={logo?.wrapper_color || logo?.color || primaryColor}
                                                     ctaText={logo?.cta_text || campaign.cta_button_text || 'SCAN'} safeScanBadge={false}
                                                     centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
                                                     size={Math.min(el.width, el.height) - 20} minimal

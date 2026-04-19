@@ -2,39 +2,57 @@ import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
     ArrowLeft, ArrowRight, Loader2, Shield, Circle, Settings, Eye,
-    Diamond, Hexagon, Square, Upload, X
+    Diamond, Hexagon, Square, Upload, X, Disc3, Monitor
 } from 'lucide-react'
 import { scanLogoApi } from '@/lib/api'
 import ScanLogoPreview from '@/components/ScanLogoPreview'
+import { useAuth } from '@/context/AuthContext'
 import toast from 'react-hot-toast'
 
 const SHAPE_ICONS: Record<string, any> = {
     shield: Shield, circle: Circle, gear: Settings,
-    eye: Eye, diamond: Diamond, hexagon: Hexagon, square: Square,
+    eye: Eye, diamond: Diamond, hexagon: Hexagon, square: Square, drum: Disc3,
+    tv: Monitor,
+}
+
+const SHAPE_LABELS: Record<string, string> = {
+    shield: 'Shield',
+    circle: 'Badge',
+    gear: 'Gear',
+    eye: 'Eye',
+    diamond: 'Diamond',
+    hexagon: 'Hex',
+    square: 'Square',
+    drum: 'Drum',
+    tv: 'TV',
 }
 
 const ANIMATION_OPTIONS = [
-    { value: 'spin', label: 'Spin', desc: 'Continuous rotation' },
-    { value: 'pulse', label: 'Pulse', desc: 'Gentle breathing' },
-    { value: 'expand', label: 'Expand', desc: 'Scale up effect' },
-    { value: 'bounce', label: 'Bounce', desc: 'Playful bounce' },
-    { value: 'glow', label: 'Glow', desc: 'Ambient glow' },
-    { value: 'flash', label: 'Flash', desc: 'CTA flashes into QR' },
-    { value: 'none', label: 'None', desc: 'Static display' },
+    { value: 'spin', label: 'Ring Spin', desc: 'Revolving text around wrapper' },
+    { value: 'orbit', label: 'Dual Orbit', desc: 'Outer text ring moves forward, inner ring moves backward' },
+    { value: 'pulse', label: 'Bubble Pulse', desc: 'Soft bubbles and top text pulse' },
+    { value: 'expand', label: 'Pop Callout', desc: 'Text bubble expands above wrapper' },
+    { value: 'bounce', label: 'Bubble Bounce', desc: 'Bubble bursts around wrapper' },
+    { value: 'glow', label: 'Neon Glow', desc: 'Glowing wrapper rim (QR stays still)' },
+    { value: 'flash', label: 'Attention Burst', desc: 'Ribbon + callout flashing burst' },
+    { value: 'none', label: 'No Motion', desc: 'Static wrapper and static QR' },
 ]
 
-const COLOR_PRESETS = ['#c8401a', '#1a6bc8', '#1a8c4e', '#8b5cf6', '#d97706', '#dc2626', '#0891b2', '#1e293b', '#ffffff']
+const QR_COLOR_PRESETS = ['#111111', '#1f2937', '#0f766e', '#1d4ed8', '#9f1239', '#7c2d12', '#166534', '#ffffff']
+const WRAPPER_COLOR_PRESETS = ['#0ea5e9', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#0f172a', '#ffffff']
 
 export default function ScanLogoBuilderPage() {
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
+    const { user } = useAuth()
     const campaignId = searchParams.get('campaign_id')
 
     const [loading, setLoading] = useState(false)
     const [destinationUrl, setDestinationUrl] = useState('')
     const [shape, setShape] = useState('shield')
-    const [animation, setAnimation] = useState('pulse')
-    const [color, setColor] = useState('#c8401a')
+    const [animation, setAnimation] = useState('orbit')
+    const [qrColor, setQrColor] = useState('#111111')
+    const [wrapperColor, setWrapperColor] = useState('#0ea5e9')
     const [ctaText, setCtaText] = useState('TAP TO SCAN')
     const [safeScanBadge, setSafeScanBadge] = useState(true)
 
@@ -67,7 +85,10 @@ export default function ScanLogoBuilderPage() {
             const res = await scanLogoApi.create({
                 campaign_id: campaignId ? Number(campaignId) : undefined,
                 destination_url: destinationUrl,
-                shape, animation, color,
+                shape,
+                animation,
+                color: qrColor,
+                wrapper_color: wrapperColor,
                 cta_text: ctaText.trim() || 'TAP TO SCAN',
                 safe_scan_badge: safeScanBadge,
             })
@@ -96,7 +117,7 @@ export default function ScanLogoBuilderPage() {
 
             <h1 className="text-2xl lg:text-3xl font-bold mb-2">Build your ScanLogo</h1>
             <p className="text-muted-foreground mb-8 text-sm">
-                Choose an animated QR style and enter where people land when they scan or tap it.
+                Build a branded QR wrapper: choose shape, color, and wrapper motion while the QR itself stays still for reliable scanning.
             </p>
 
             <div className="grid lg:grid-cols-5 gap-8">
@@ -141,7 +162,7 @@ export default function ScanLogoBuilderPage() {
 
                     {/* Shape */}
                     <div className="bg-card border border-border rounded-2xl p-5">
-                        <label className="block text-sm font-semibold mb-3">Button Shape</label>
+                        <label className="block text-sm font-semibold mb-3">Wrapper Shape</label>
                         <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
                             {Object.entries(SHAPE_ICONS).map(([key, Icon]) => (
                                 <button
@@ -150,7 +171,7 @@ export default function ScanLogoBuilderPage() {
                                     className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${shape === key ? 'border-primary bg-primary/5' : 'border-transparent bg-muted/50 hover:border-primary/30'}`}
                                 >
                                     <Icon className="w-5 h-5" />
-                                    <span className="text-[10px] capitalize">{key}</span>
+                                    <span className="text-[10px] capitalize">{SHAPE_LABELS[key] || key}</span>
                                 </button>
                             ))}
                         </div>
@@ -158,7 +179,8 @@ export default function ScanLogoBuilderPage() {
 
                     {/* Animation */}
                     <div className="bg-card border border-border rounded-2xl p-5">
-                        <label className="block text-sm font-semibold mb-3">Animation Style</label>
+                        <label className="block text-sm font-semibold mb-1">Wrapper Motion</label>
+                        <p className="text-[11px] text-muted-foreground mb-3">Motion applies only to the wrapper. QR code and shape stay static.</p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {ANIMATION_OPTIONS.map((opt) => (
                                 <button
@@ -173,25 +195,59 @@ export default function ScanLogoBuilderPage() {
                         </div>
                     </div>
 
-                    {/* Color */}
+                    {/* Colors */}
                     <div className="bg-card border border-border rounded-2xl p-5">
-                        <label className="block text-sm font-semibold mb-3">Button Color</label>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            {COLOR_PRESETS.map((c) => (
-                                <button
-                                    key={c}
-                                    onClick={() => setColor(c)}
-                                    className={`w-9 h-9 rounded-lg transition-all border ${color === c ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'hover:scale-105'} ${c === '#ffffff' ? 'border-border' : 'border-transparent'}`}
-                                    style={{ backgroundColor: c }}
-                                />
-                            ))}
-                            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-9 h-9 rounded-lg cursor-pointer border border-border" />
+                        <label className="block text-sm font-semibold mb-1">Color Controls</label>
+                        <p className="text-[11px] text-muted-foreground mb-4">Set QR and shape color separately from wrapper background color.</p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <p className="text-xs font-medium mb-2">QR + Shape Color</p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {QR_COLOR_PRESETS.map((c) => (
+                                        <button
+                                            key={`qr-${c}`}
+                                            onClick={() => setQrColor(c)}
+                                            className={`w-9 h-9 rounded-lg transition-all border ${qrColor === c ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'hover:scale-105'} ${c === '#ffffff' ? 'border-border' : 'border-transparent'}`}
+                                            style={{ backgroundColor: c }}
+                                        />
+                                    ))}
+                                    <input
+                                        type="color"
+                                        value={qrColor}
+                                        onChange={(e) => setQrColor(e.target.value)}
+                                        className="w-9 h-9 rounded-lg cursor-pointer border border-border"
+                                        title="Pick QR and shape color"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <p className="text-xs font-medium mb-2">Wrapper Background Color</p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {WRAPPER_COLOR_PRESETS.map((c) => (
+                                        <button
+                                            key={`wrapper-${c}`}
+                                            onClick={() => setWrapperColor(c)}
+                                            className={`w-9 h-9 rounded-lg transition-all border ${wrapperColor === c ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'hover:scale-105'} ${c === '#ffffff' ? 'border-border' : 'border-transparent'}`}
+                                            style={{ backgroundColor: c }}
+                                        />
+                                    ))}
+                                    <input
+                                        type="color"
+                                        value={wrapperColor}
+                                        onChange={(e) => setWrapperColor(e.target.value)}
+                                        className="w-9 h-9 rounded-lg cursor-pointer border border-border"
+                                        title="Pick wrapper background color"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     {/* CTA Text */}
                     <div className="bg-card border border-border rounded-2xl p-5">
-                        <label className="block text-sm font-semibold mb-1.5">Button Text</label>
+                        <label className="block text-sm font-semibold mb-1.5">Wrapper Text</label>
                         <input
                             type="text"
                             placeholder="TAP TO SCAN"
@@ -212,7 +268,7 @@ export default function ScanLogoBuilderPage() {
                                 onClick={() => setSafeScanBadge(!safeScanBadge)}
                                 className={`w-11 h-6 rounded-full transition-all relative ${safeScanBadge ? 'bg-primary' : 'bg-muted'}`}
                             >
-                                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${safeScanBadge ? 'left-[22px]' : 'left-0.5'}`} />
+                                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${safeScanBadge ? 'left-5.5' : 'left-0.5'}`} />
                             </button>
                         </div>
                     </div>
@@ -223,7 +279,7 @@ export default function ScanLogoBuilderPage() {
                         disabled={loading}
                         className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 text-sm shadow-lg shadow-primary/25 disabled:opacity-50"
                     >
-                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Create ScanLogo (3 credits) <ArrowRight className="w-4 h-4" /></>}
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>{user?.is_admin ? 'Create ScanLogo (Admin free)' : 'Create ScanLogo (3 credits)'} <ArrowRight className="w-4 h-4" /></>}
                     </button>
                 </div>
 
@@ -236,12 +292,13 @@ export default function ScanLogoBuilderPage() {
                                 url={destinationUrl || 'https://nowqr.com'}
                                 shape={shape}
                                 animation={animation}
-                                color={color}
+                                color={qrColor}
+                                wrapperColor={wrapperColor}
                                 ctaText={ctaText}
                                 safeScanBadge={safeScanBadge}
                                 centerLogoUrl={logoPreviewUrl}
                                 shortUrl="nqr.ai/xxxxxx"
-                                size={160}
+                                size={180}
                             />
 
                             {/* Download preview */}

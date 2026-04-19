@@ -1,4 +1,4 @@
-const FALLBACK_COLOR = '#c8401a'
+const FALLBACK_COLOR = '#111111'
 
 type Rgb = { r: number; g: number; b: number }
 
@@ -57,6 +57,25 @@ function contrastRatio(colorA: string, colorB: string): number {
     return (lighter + 0.05) / (darker + 0.05)
 }
 
+function rgbToHex(rgb: Rgb): string {
+    const toChannel = (value: number) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, '0')
+    return `#${toChannel(rgb.r)}${toChannel(rgb.g)}${toChannel(rgb.b)}`
+}
+
+function mixColors(baseColor: string, blendColor: string, blendAmount: number): string {
+    const base = toRgb(baseColor)
+    const blend = toRgb(blendColor)
+    if (!base || !blend) return baseColor
+
+    const amount = clamp01(blendAmount)
+
+    return rgbToHex({
+        r: (base.r * (1 - amount)) + (blend.r * amount),
+        g: (base.g * (1 - amount)) + (blend.g * amount),
+        b: (base.b * (1 - amount)) + (blend.b * amount),
+    })
+}
+
 export function colorWithAlpha(color: string, alpha: number): string {
     const rgb = toRgb(color)
     if (!rgb) return `rgba(200, 64, 26, ${clamp01(alpha)})`
@@ -77,76 +96,123 @@ function getReadableColorForBackground(preferredColor: string, backgroundColor: 
     return getReadableTextColor(backgroundColor)
 }
 
-export function getScanLogoVisuals(color?: string) {
+export function getScanLogoVisuals(color?: string, wrapperColor?: string) {
     const resolvedColor = normalizeHex(color || '') || FALLBACK_COLOR
-    const lum = luminance(resolvedColor) ?? 0.3
+    const resolvedWrapperColor = normalizeHex(wrapperColor || '') || resolvedColor
 
-    const isVeryLight = lum >= 0.85
-    const isVeryDark = lum <= 0.1
+    const qrLum = luminance(resolvedColor) ?? 0.3
+    const wrapperLum = luminance(resolvedWrapperColor) ?? 0.3
 
-    const qrBgColor = isVeryLight
-        ? '#0f172a'
-        : isVeryDark
-            ? '#ffffff'
-            : 'transparent'
+    const isQrVeryLight = qrLum >= 0.85
+    const isQrVeryDark = qrLum <= 0.1
+    const isWrapperVeryLight = wrapperLum >= 0.85
 
-    const contrastStrokeColor = isVeryLight
-        ? 'rgba(15, 23, 42, 0.6)'
-        : isVeryDark
-            ? 'rgba(255, 255, 255, 0.65)'
-            : 'transparent'
+    // Keep very light wrapper themes visible on light page backgrounds.
+    const tonedWrapperColor = isWrapperVeryLight
+        ? mixColors(resolvedWrapperColor, '#94a3b8', 0.38)
+        : resolvedWrapperColor
 
-    const shapeStrokeColor = isVeryLight
-        ? '#6b7280'
-        : isVeryDark
-            ? '#e5e7eb'
-            : resolvedColor
+    // QR core stays high-contrast and static for scan reliability.
+    const qrBgColor = '#ffffff'
+    const qrFgColor = getReadableColorForBackground(resolvedColor, qrBgColor, 4.5)
+
+    const shapeStrokeColor = isQrVeryLight
+        ? '#1e293b'
+        : isQrVeryDark
+            ? '#f8fafc'
+            : colorWithAlpha(resolvedColor, 0.92)
+
+    const contrastStrokeColor = isQrVeryLight
+        ? 'rgba(15, 23, 42, 0.52)'
+        : isQrVeryDark
+            ? 'rgba(255, 255, 255, 0.74)'
+            : colorWithAlpha(resolvedColor, 0.58)
+
+    // Keep shape color visibly tied to the QR+shape picker selection.
+    const shapeFillColor = isQrVeryLight
+        ? colorWithAlpha(resolvedColor, 0.36)
+        : colorWithAlpha(resolvedColor, 0.44)
+
+    const shapeFillStrongColor = isQrVeryLight
+        ? colorWithAlpha(resolvedColor, 0.52)
+        : colorWithAlpha(resolvedColor, 0.62)
+
+    const wrapperGradientStart = isWrapperVeryLight
+        ? colorWithAlpha(tonedWrapperColor, 0.92)
+        : colorWithAlpha(tonedWrapperColor, 0.98)
+
+    const wrapperGradientEnd = isWrapperVeryLight
+        ? colorWithAlpha(tonedWrapperColor, 0.72)
+        : colorWithAlpha(tonedWrapperColor, 0.76)
+
+    const wrapperAccentColor = isWrapperVeryLight ? '#0f172a' : '#facc15'
+    const wrapperInnerRingColor = isWrapperVeryLight ? 'rgba(15, 23, 42, 0.18)' : 'rgba(15, 23, 42, 0.12)'
+    const wrapperTopTextColor = getReadableTextColor(tonedWrapperColor)
+    const bubbleColor = isWrapperVeryLight
+        ? 'rgba(15, 23, 42, 0.18)'
+        : colorWithAlpha(tonedWrapperColor, 0.34)
+
+    const orbitStrokeColor = wrapperTopTextColor === '#0f172a'
+        ? 'rgba(255, 255, 255, 0.66)'
+        : 'rgba(15, 23, 42, 0.5)'
 
     return {
         resolvedColor,
+        resolvedWrapperColor,
         qrBgColor,
-        qrFgColor: resolvedColor,
-        shapeFillColor: colorWithAlpha(resolvedColor, 0.1),
-        shapeFillStrongColor: colorWithAlpha(resolvedColor, 0.15),
-        glowColor: isVeryLight
+        qrFgColor,
+        shapeFillColor,
+        shapeFillStrongColor,
+        glowColor: isWrapperVeryLight
             ? 'rgba(15, 23, 42, 0.45)'
-            : colorWithAlpha(resolvedColor, 0.4),
-        flashTextColor: getReadableTextColor(resolvedColor),
-        labelTextColor: isVeryLight ? '#0f172a' : resolvedColor,
+            : colorWithAlpha(tonedWrapperColor, 0.4),
+        flashTextColor: getReadableTextColor(tonedWrapperColor),
+        labelTextColor: isQrVeryLight ? '#0f172a' : resolvedColor,
         labelTextColorLightBg: getReadableColorForBackground(resolvedColor, '#ffffff', 3),
         labelTextColorDarkBg: getReadableColorForBackground(resolvedColor, '#0b1220', 3),
         shapeStrokeColor,
         contrastStrokeColor,
-        labelTextShadow: isVeryLight ? '0 1px 2px rgba(255, 255, 255, 0.35)' : 'none',
+        labelTextShadow: isQrVeryLight ? '0 1px 2px rgba(255, 255, 255, 0.35)' : 'none',
+        wrapperGradientStart,
+        wrapperGradientEnd,
+        wrapperAccentColor,
+        wrapperInnerRingColor,
+        wrapperTopTextColor,
+        orbitStrokeColor,
+        bubbleColor,
     }
 }
 
 export function getQrScaleForShape(shape?: string): number {
     const normalizedShape = (shape || '').toLowerCase()
 
-    // Keep QR visually inside each shape while preserving enough module size for mobile scanning.
-    if (normalizedShape === 'square') return 0.7
-    if (normalizedShape === 'circle') return 0.64
-    if (normalizedShape === 'hexagon') return 0.6
-    if (normalizedShape === 'shield') return 0.56
-    if (normalizedShape === 'diamond') return 0.54
-    if (normalizedShape === 'gear') return 0.56
-    if (normalizedShape === 'eye') return 0.5
+    // Keep QR fully inside each shape border while preserving scan reliability.
+    if (normalizedShape === 'square') return 0.74
+    if (normalizedShape === 'circle') return 0.7
+    if (normalizedShape === 'hexagon') return 0.66
+    if (normalizedShape === 'shield') return 0.64
+    if (normalizedShape === 'diamond') return 0.58
+    if (normalizedShape === 'gear') return 0.6
+    if (normalizedShape === 'eye') return 0.54
+    if (normalizedShape === 'drum') return 0.64
+    if (normalizedShape === 'tv') return 0.64
 
-    return 0.58
+    return 0.62
 }
 
 export function getShapeFrameScale(shape?: string): number {
     const normalizedShape = (shape || '').toLowerCase()
 
-    // Keep QR module size unchanged and grow the shape frame for extra inner padding.
+    // Grow frame for constrained shapes so QR sits comfortably inside the border.
     if (normalizedShape === 'square') return 1
-    if (normalizedShape === 'circle') return 1.08
-    if (normalizedShape === 'hexagon') return 1.14
+    if (normalizedShape === 'circle') return 1.1
+    if (normalizedShape === 'hexagon') return 1.18
     if (normalizedShape === 'shield') return 1.22
-    if (normalizedShape === 'diamond') return 1.18
+    if (normalizedShape === 'diamond') return 1.2
     if (normalizedShape === 'gear') return 1.24
-    if (normalizedShape === 'eye') return 1.18
+    if (normalizedShape === 'eye') return 1.2
+    if (normalizedShape === 'drum') return 1.22
+    if (normalizedShape === 'tv') return 1.2
 
     return 1.16
 }
@@ -167,6 +233,8 @@ function getFlashTextWidthPercent(shape?: string): number {
     if (normalizedShape === 'diamond') return 64
     if (normalizedShape === 'gear') return 62
     if (normalizedShape === 'eye') return 60
+    if (normalizedShape === 'drum') return 68
+    if (normalizedShape === 'tv') return 72
 
     return 68
 }
@@ -181,6 +249,8 @@ function getFlashTextShapeScale(shape?: string): number {
     if (normalizedShape === 'diamond') return 0.86
     if (normalizedShape === 'gear') return 0.84
     if (normalizedShape === 'eye') return 0.82
+    if (normalizedShape === 'drum') return 0.84
+    if (normalizedShape === 'tv') return 0.9
 
     return 0.9
 }

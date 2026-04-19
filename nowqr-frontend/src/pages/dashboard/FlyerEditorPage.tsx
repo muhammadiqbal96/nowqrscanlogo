@@ -5,6 +5,7 @@ import {
     Loader2, Copy, Layers, ChevronUp, ChevronDown,
     Bold, Italic, Sparkles,
     AlignLeft, AlignCenter, AlignRight, MousePointer, Lock, Unlock,
+    Menu, MoreVertical, X,
 } from 'lucide-react'
 import { toPng, toJpeg } from 'html-to-image'
 import { campaignApi, scanLogoApi, aiApi } from '@/lib/api'
@@ -112,7 +113,7 @@ export default function FlyerEditorPage() {
     const [searchParams] = useSearchParams()
     const isFlyerMode = searchParams.get('type') === 'flyer'
     const templateSessionToken = (location.state as { templateSessionToken?: string } | null)?.templateSessionToken
-    const { refreshUser } = useAuth()
+    const { user, refreshUser } = useAuth()
     const canvasRef = useRef<HTMLDivElement>(null)
     const canvasWrapRef = useRef<HTMLDivElement>(null)
 
@@ -124,12 +125,15 @@ export default function FlyerEditorPage() {
 
     // Canvas state
     const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16')
-    const [bgColor, setBgColor] = useState('#0a0a0a')
+    const [bgColor, setBgColor] = useState('#ffffff')
     const [bgImage, setBgImage] = useState<string | null>(null)
     const [bgTemplate, setBgTemplate] = useState<number | null>(null)
     const [elements, setElements] = useState<FlyerElement[]>([])
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [canvasScale, setCanvasScale] = useState(0.35)
+    const [isCompactLayout, setIsCompactLayout] = useState(false)
+    const [leftPanelOpen, setLeftPanelOpen] = useState(false)
+    const [rightPanelOpen, setRightPanelOpen] = useState(false)
 
     // Drag state
     const [dragging, setDragging] = useState(false)
@@ -239,12 +243,31 @@ export default function FlyerEditorPage() {
             const padX = 40, padY = 40
             const scaleX = (wrap.width - padX) / canvasSize.w
             const scaleY = (wrap.height - padY) / canvasSize.h
-            setCanvasScale(Math.min(scaleX, scaleY, 0.75))
+            const nextScale = Math.min(scaleX, scaleY, 0.75)
+            // Keep the post readable on smaller screens; allow scroll instead of shrinking too far.
+            setCanvasScale(Math.max(nextScale, 0.35))
         }
         recalc()
         window.addEventListener('resize', recalc)
         return () => window.removeEventListener('resize', recalc)
     }, [canvasSize])
+
+    /* ─── Compact/mobile layout handling ────────────────────── */
+    useEffect(() => {
+        const handleResize = () => {
+            const compact = window.innerWidth < 1280
+            setIsCompactLayout(compact)
+
+            if (!compact) {
+                setLeftPanelOpen(false)
+                setRightPanelOpen(false)
+            }
+        }
+
+        handleResize()
+        window.addEventListener('resize', handleResize)
+        return () => window.removeEventListener('resize', handleResize)
+    }, [])
 
     /* ─── Remap elements when aspect ratio changes ───────────── */
     useEffect(() => {
@@ -262,18 +285,18 @@ export default function FlyerEditorPage() {
             y: Math.round(el.y * scaleY),
             width: Math.round(el.width * scaleX),
             height: Math.round(el.height * scaleY),
-            fontSize: el.fontSize ? Math.max(8, Math.round(el.fontSize * fontScale)) : el.fontSize,
+            fontSize: el.fontSize ? Math.max(12, Math.round(el.fontSize * fontScale)) : el.fontSize,
         })))
         prevCanvasSizeRef.current = canvasSize
     }, [canvasSize])
 
     /* ─── Populate default elements from campaign ────────────── */
     const populateFromCampaign = (camp: any) => {
-        const color = camp.primary_color || '#c8401a'
+        const color = '#111111'
         const font = camp.font_family || 'Inter'
 
-        // Create a gradient background from the primary color
-        setBgColor(`linear-gradient(160deg, ${color} 0%, #1e1b4b 100%)`)
+        // Default to high-contrast light canvas so text stays readable out of the box.
+        setBgColor('linear-gradient(160deg, #ffffff 0%, #f3f4f6 100%)')
 
         const els: FlyerElement[] = []
 
@@ -298,7 +321,7 @@ export default function FlyerEditorPage() {
             id: uid(), type: 'text', x: 80, y: 160, width: 500, height: 50,
             rotation: 0, locked: false,
             content: camp.business_name || 'Your Business',
-            fontSize: 18, fontFamily: font, fontWeight: '700',
+            fontSize: 24, fontFamily: font, fontWeight: '700',
             textColor: color, textAlign: 'left', fontStyle: 'normal',
         })
 
@@ -307,8 +330,8 @@ export default function FlyerEditorPage() {
             id: uid(), type: 'text', x: 80, y: 320, width: 920, height: 220,
             rotation: 0, locked: false,
             content: camp.headline || 'Your Headline Here',
-            fontSize: 68, fontFamily: font, fontWeight: '800',
-            textColor: '#ffffff', textAlign: 'left', fontStyle: 'normal',
+            fontSize: 76, fontFamily: font, fontWeight: '800',
+            textColor: '#111111', textAlign: 'left', fontStyle: 'normal',
         })
 
         // Divider line
@@ -323,8 +346,8 @@ export default function FlyerEditorPage() {
                 id: uid(), type: 'text', x: 80, y: 610, width: 800, height: 80,
                 rotation: 0, locked: false,
                 content: camp.sub_headline,
-                fontSize: 24, fontFamily: font, fontWeight: '400',
-                textColor: 'rgba(255,255,255,0.85)', textAlign: 'left', fontStyle: 'normal',
+                fontSize: 30, fontFamily: font, fontWeight: '500',
+                textColor: '#111111', textAlign: 'left', fontStyle: 'normal',
             })
         }
 
@@ -334,8 +357,8 @@ export default function FlyerEditorPage() {
                 id: uid(), type: 'text', x: 80, y: 730, width: 800, height: 180,
                 rotation: 0, locked: false,
                 content: camp.description,
-                fontSize: 20, fontFamily: font, fontWeight: '400',
-                textColor: 'rgba(255,255,255,0.7)', textAlign: 'left', fontStyle: 'normal',
+                fontSize: 24, fontFamily: font, fontWeight: '400',
+                textColor: '#374151', textAlign: 'left', fontStyle: 'normal',
             })
         }
 
@@ -355,7 +378,7 @@ export default function FlyerEditorPage() {
                 id: uid(), type: 'text', x: 80, y: 1500, width: 340, height: 70,
                 rotation: 0, locked: false,
                 content: camp.cta_button_text,
-                fontSize: 20, fontFamily: font, fontWeight: '700',
+                fontSize: 24, fontFamily: font, fontWeight: '700',
                 textColor: '#ffffff', textAlign: 'center', fontStyle: 'normal',
             })
         }
@@ -371,8 +394,8 @@ export default function FlyerEditorPage() {
             id: uid(), type: 'text', x: 340, y: 1840, width: 400, height: 40,
             rotation: 0, locked: false,
             content: 'Powered by NowQR',
-            fontSize: 13, fontFamily: font, fontWeight: '400',
-            textColor: 'rgba(255,255,255,0.5)', textAlign: 'center', fontStyle: 'normal',
+            fontSize: 16, fontFamily: font, fontWeight: '400',
+            textColor: 'rgba(17,17,17,0.7)', textAlign: 'center', fontStyle: 'normal',
         })
 
         setElements(els)
@@ -424,11 +447,19 @@ export default function FlyerEditorPage() {
     }
 
     /* ─── Drag handlers ──────────────────────────────────────── */
-    const handlePointerDown = (e: React.PointerEvent, elId: string) => {
+    const handlePointerDown = (e: React.PointerEvent, elId: string, forceDrag = false) => {
         e.stopPropagation()
         const el = elements.find(x => x.id === elId)
         if (!el || el.locked) return
         setSelectedId(elId)
+
+        const isTouchLike = e.pointerType === 'touch' || e.pointerType === 'pen'
+        if (isCompactLayout && isTouchLike && !forceDrag) {
+            // On compact touch layouts, allow swipe-to-scroll by default.
+            // Dragging is initiated intentionally from the dedicated drag handle.
+            return
+        }
+
         setDragging(true)
         const rect = (e.target as HTMLElement).closest('[data-element]')?.getBoundingClientRect()
         if (rect) {
@@ -437,7 +468,8 @@ export default function FlyerEditorPage() {
                 y: (e.clientY - rect.top) / canvasScale,
             })
         }
-        ; (e.target as HTMLElement).setPointerCapture(e.pointerId)
+
+        ; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     }
 
     const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -491,7 +523,7 @@ export default function FlyerEditorPage() {
             content: 'Double click to edit',
             fontSize: 32, fontFamily: campaign?.font_family || 'Inter',
             fontWeight: '600', fontStyle: 'normal',
-            textColor: '#ffffff', textAlign: 'center',
+            textColor: '#111111', textAlign: 'center',
         })
     }
 
@@ -499,7 +531,7 @@ export default function FlyerEditorPage() {
         addElement({
             type: 'shape',
             width: 200, height: 200,
-            bgColor: campaign?.primary_color || '#c8401a',
+            bgColor: '#111111',
             borderRadius: 16, opacity: 0.3,
         })
     }
@@ -752,6 +784,8 @@ export default function FlyerEditorPage() {
             if (e.key === 'Escape') {
                 setSelectedId(null)
                 setEditingTextId(null)
+                setLeftPanelOpen(false)
+                setRightPanelOpen(false)
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
                 e.preventDefault()
@@ -767,72 +801,149 @@ export default function FlyerEditorPage() {
         return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
     }
 
+    const toolbarActionButtons = (
+        <>
+            {/* Aspect ratio */}
+            <Select value={aspectRatio} onValueChange={v => setAspectRatio(v as AspectRatio)}>
+                <SelectTrigger className="text-xs h-8 w-40">
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    {Object.entries(CANVAS_SIZES).map(([key, val]) => (
+                        <SelectItem key={key} value={key}>{val.label} ({key})</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+
+            {/* Save to Campaign */}
+            <button
+                onClick={saveToCampaign}
+                disabled={saving || exporting}
+                className={`flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50 ${isCompactLayout ? 'min-w-24 justify-center' : ''}`}
+            >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
+                {isFlyerMode ? 'Save Flyer' : 'Save'}
+            </button>
+
+            {/* Export */}
+            <button
+                onClick={() => exportFlyer('png')}
+                disabled={exporting || saving}
+                className={`flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 disabled:opacity-50 ${isCompactLayout ? 'min-w-20 justify-center' : ''}`}
+            >
+                {exportingFormat === 'png' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                PNG
+            </button>
+            <button
+                onClick={() => exportFlyer('jpg')}
+                disabled={exporting || saving}
+                className={`flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-lg text-xs font-medium hover:bg-muted/80 disabled:opacity-50 ${isCompactLayout ? 'min-w-20 justify-center' : ''}`}
+            >
+                {exportingFormat === 'jpg' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                JPG
+            </button>
+            <button
+                onClick={() => exportFlyer('gif')}
+                disabled={exporting || saving}
+                className={`flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-lg text-xs font-medium hover:bg-muted/80 disabled:opacity-50 ${isCompactLayout ? 'min-w-20 justify-center' : ''}`}
+            >
+                {exportingFormat === 'gif' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                GIF
+            </button>
+        </>
+    )
+
     return (
-        <div className="h-[calc(100vh-80px)] flex flex-col">
+        <div className="h-[calc(100vh-80px)] flex flex-col relative">
             {/* Top toolbar */}
-            <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card shrink-0">
-                <div className="flex items-center gap-3">
-                    <button onClick={() => navigate(`/dashboard/campaigns/${id}`)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-                        <ArrowLeft className="w-4 h-4" /> Back
-                    </button>
-                    <span className="text-sm font-medium truncate max-w-[200px]">{campaign?.name || 'Flyer'}</span>
+            {isCompactLayout ? (
+                <div className="px-3 py-2 border-b border-border bg-card shrink-0 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <button
+                                onClick={() => {
+                                    setLeftPanelOpen((prev) => !prev)
+                                    setRightPanelOpen(false)
+                                }}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0"
+                                title="Open tools"
+                                aria-label="Open tools panel"
+                            >
+                                <Menu className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => navigate(`/dashboard/campaigns/${id}`)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground shrink-0">
+                                <ArrowLeft className="w-4 h-4" /> Back
+                            </button>
+                            <span className="text-sm font-medium truncate min-w-0 flex-1">{campaign?.name || 'Flyer'}</span>
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                setRightPanelOpen((prev) => !prev)
+                                setLeftPanelOpen(false)
+                            }}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0"
+                            title="Open properties"
+                            aria-label="Open properties panel"
+                        >
+                            <MoreVertical className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <div className="w-full overflow-x-auto pb-1">
+                        <div className="flex items-center gap-2 w-max min-w-full pr-1">
+                            {toolbarActionButtons}
+                        </div>
+                    </div>
                 </div>
+            ) : (
+                <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-card shrink-0">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => navigate(`/dashboard/campaigns/${id}`)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+                            <ArrowLeft className="w-4 h-4" /> Back
+                        </button>
+                        <span className="text-sm font-medium truncate max-w-50">{campaign?.name || 'Flyer'}</span>
+                    </div>
 
-                <div className="flex items-center gap-2">
-                    {/* Aspect ratio */}
-                    <Select value={aspectRatio} onValueChange={v => setAspectRatio(v as AspectRatio)}>
-                        <SelectTrigger className="text-xs h-8 w-[160px]">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {Object.entries(CANVAS_SIZES).map(([key, val]) => (
-                                <SelectItem key={key} value={key}>{val.label} ({key})</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-
-                    {/* Save to Campaign */}
-                    <button
-                        onClick={saveToCampaign}
-                        disabled={saving || exporting}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50"
-                    >
-                        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
-                        {isFlyerMode ? 'Save Flyer' : 'Save'}
-                    </button>
-
-                    {/* Export */}
-                    <button
-                        onClick={() => exportFlyer('png')}
-                        disabled={exporting || saving}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
-                    >
-                        {exportingFormat === 'png' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                        PNG
-                    </button>
-                    <button
-                        onClick={() => exportFlyer('jpg')}
-                        disabled={exporting || saving}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-lg text-xs font-medium hover:bg-muted/80 disabled:opacity-50"
-                    >
-                        {exportingFormat === 'jpg' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                        JPG
-                    </button>
-                    <button
-                        onClick={() => exportFlyer('gif')}
-                        disabled={exporting || saving}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-lg text-xs font-medium hover:bg-muted/80 disabled:opacity-50"
-                    >
-                        {exportingFormat === 'gif' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                        GIF
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {toolbarActionButtons}
+                    </div>
                 </div>
-            </div>
+            )}
 
-            <div className="flex flex-1 overflow-hidden">
+            <div className="relative flex flex-1 overflow-hidden">
+                {isCompactLayout && (leftPanelOpen || rightPanelOpen) && (
+                    <button
+                        className="absolute inset-0 z-20 bg-black/40 backdrop-blur-[1px]"
+                        aria-label="Close side panels"
+                        onClick={() => {
+                            setLeftPanelOpen(false)
+                            setRightPanelOpen(false)
+                        }}
+                    />
+                )}
+
                 {/* ─── Left toolbar ──────────────────────────── */}
-                <div className="w-64 border-r border-border bg-card overflow-y-auto shrink-0">
+                <div
+                    className={`w-64 border-r border-border bg-card overflow-y-auto shrink-0 ${isCompactLayout
+                        ? `absolute inset-y-0 left-0 z-30 shadow-xl transition-transform duration-300 ${leftPanelOpen ? 'translate-x-0' : '-translate-x-full'}`
+                        : 'relative'
+                        }`}
+                >
                     <div className="p-3 space-y-4">
+                        {isCompactLayout && (
+                            <div className="flex items-center justify-between pb-2 border-b border-border">
+                                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Editor Tools</p>
+                                <button
+                                    onClick={() => setLeftPanelOpen(false)}
+                                    className="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-muted/60"
+                                    aria-label="Close tools panel"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+
                         {/* Tools */}
                         <div>
                             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Add Elements</p>
@@ -859,12 +970,12 @@ export default function FlyerEditorPage() {
                                 <button
                                     onClick={regenerateFromAI}
                                     disabled={regenerating}
-                                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg text-xs font-medium hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 transition-all"
+                                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-linear-to-r from-purple-600 to-pink-600 text-white rounded-lg text-xs font-medium hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 transition-all"
                                 >
                                     {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                                     {regenerating ? 'Generating...' : 'Regenerate with AI'}
                                 </button>
-                                <p className="text-[10px] text-muted-foreground mt-1 text-center">Uses 5 credits</p>
+                                <p className="text-[10px] text-muted-foreground mt-1 text-center">{user?.is_admin ? 'Admin: no credits charged' : 'Uses 5 credits'}</p>
                             </div>
                         )}
 
@@ -877,7 +988,7 @@ export default function FlyerEditorPage() {
                                     <div className="w-8 h-8 rounded border border-border shrink-0 overflow-hidden">
                                         <div className="w-full h-full" style={{ background: bgImage ? `url(${bgImage}) center/cover` : bgColor }} />
                                     </div>
-                                    <input type="color" value={bgColor.startsWith('#') ? bgColor : '#0a0a0a'} onChange={e => { setBgColor(e.target.value); setBgImage(null); setBgTemplate(null) }}
+                                    <input type="color" value={bgColor.startsWith('#') ? bgColor : '#ffffff'} onChange={e => { setBgColor(e.target.value); setBgImage(null); setBgTemplate(null) }}
                                         className="w-8 h-8 rounded border border-border cursor-pointer shrink-0" />
                                     <span className="text-xs text-muted-foreground">Solid color</span>
                                 </div>
@@ -920,8 +1031,21 @@ export default function FlyerEditorPage() {
                 {/* ─── Canvas area ───────────────────────────── */}
                 <div
                     ref={canvasWrapRef}
-                    className="flex-1 bg-muted/30 overflow-auto flex items-center justify-center p-6"
-                    onClick={() => { setSelectedId(null); setEditingTextId(null) }}
+                    className={`flex-1 bg-muted/30 overflow-auto p-6 ${isCompactLayout ? 'flex items-start justify-start' : 'flex items-center justify-center'}`}
+                    style={{
+                        WebkitOverflowScrolling: 'touch',
+                        overscrollBehaviorX: 'contain',
+                        overscrollBehaviorY: 'contain',
+                        touchAction: isCompactLayout ? 'pan-x pan-y' : 'auto',
+                    }}
+                    onClick={() => {
+                        setSelectedId(null)
+                        setEditingTextId(null)
+                        if (isCompactLayout) {
+                            setLeftPanelOpen(false)
+                            setRightPanelOpen(false)
+                        }
+                    }}
                 >
                     {/* Scaled wrapper — gives the flex parent the correct visual dimensions */}
                     <div style={{ width: canvasSize.w * canvasScale, height: canvasSize.h * canvasScale, flexShrink: 0 }}>
@@ -1024,6 +1148,7 @@ export default function FlyerEditorPage() {
                                                     shape={logo?.shape || 'shield'}
                                                     animation={logo?.animation || 'none'}
                                                     color={logo?.color || campaign?.primary_color || '#c8401a'}
+                                                    wrapperColor={logo?.wrapper_color || logo?.color || campaign?.primary_color || '#c8401a'}
                                                     ctaText={logo?.cta_text || campaign?.cta_button_text || 'SCAN ME'}
                                                     safeScanBadge={false}
                                                     centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
@@ -1041,6 +1166,20 @@ export default function FlyerEditorPage() {
                                             onPointerDown={(e) => handleResizeStart(e, 'br')}
                                         />
                                     )}
+
+                                    {/* Mobile drag handle: keeps swipe-to-scroll usable on compact layouts */}
+                                    {selectedId === el.id && !el.locked && isCompactLayout && (
+                                        <button
+                                            type="button"
+                                            className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full border border-border bg-background/95 shadow-md flex items-center justify-center touch-none z-50"
+                                            onPointerDown={(e) => handlePointerDown(e, el.id, true)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            aria-label="Drag element"
+                                            title="Drag element"
+                                        >
+                                            <MousePointer className="w-4 h-4" />
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -1048,8 +1187,26 @@ export default function FlyerEditorPage() {
                 </div>
 
                 {/* ─── Right properties panel ────────────────── */}
-                <div className="w-64 border-l border-border bg-card overflow-y-auto shrink-0">
+                <div
+                    className={`w-64 border-l border-border bg-card overflow-y-auto shrink-0 ${isCompactLayout
+                        ? `absolute inset-y-0 right-0 z-30 shadow-xl transition-transform duration-300 ${rightPanelOpen ? 'translate-x-0' : 'translate-x-full'}`
+                        : 'relative'
+                        }`}
+                >
                     <div className="p-3">
+                        {isCompactLayout && (
+                            <div className="flex items-center justify-between pb-2 mb-3 border-b border-border">
+                                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Properties</p>
+                                <button
+                                    onClick={() => setRightPanelOpen(false)}
+                                    className="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-muted/60"
+                                    aria-label="Close properties panel"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+
                         {selected ? (
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
@@ -1119,7 +1276,7 @@ export default function FlyerEditorPage() {
                                                 </SelectContent>
                                             </Select>
                                             <div className="flex items-center gap-1.5">
-                                                <input type="number" min={8} max={200} value={selected.fontSize || 32}
+                                                <input type="number" min={12} max={200} value={selected.fontSize || 32}
                                                     onChange={e => updateElement(selected.id, { fontSize: +e.target.value })}
                                                     className="w-16 px-2 py-1 text-xs border border-border rounded bg-background" />
                                                 <button onClick={() => updateElement(selected.id, { fontWeight: selected.fontWeight === '700' ? '400' : '700' })}
@@ -1148,7 +1305,7 @@ export default function FlyerEditorPage() {
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Text Color</p>
-                                            <input type="color" value={selected.textColor || '#ffffff'}
+                                            <input type="color" value={selected.textColor || '#111111'}
                                                 onChange={e => updateElement(selected.id, { textColor: e.target.value })}
                                                 className="w-8 h-8 rounded border border-border cursor-pointer" />
                                         </div>
@@ -1160,7 +1317,7 @@ export default function FlyerEditorPage() {
                                     <>
                                         <div>
                                             <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Fill</p>
-                                            <input type="color" value={selected.bgColor || '#c8401a'}
+                                            <input type="color" value={selected.bgColor || '#111111'}
                                                 onChange={e => updateElement(selected.id, { bgColor: e.target.value })}
                                                 className="w-8 h-8 rounded border border-border cursor-pointer" />
                                         </div>

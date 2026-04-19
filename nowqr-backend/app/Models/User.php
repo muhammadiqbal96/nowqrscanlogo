@@ -104,11 +104,26 @@ class User extends Authenticatable implements MustVerifyEmail
     // Credit helpers
     public function hasCredits(int $amount): bool
     {
+        if ($this->is_admin) {
+            return true;
+        }
+
         return $this->credits >= $amount;
     }
 
     public function deductCredits(int $amount, string $description, ?string $refType = null, ?int $refId = null): CreditTransaction
     {
+        if ($this->is_admin) {
+            return $this->creditTransactions()->create([
+                'amount' => 0,
+                'balance_after' => $this->credits,
+                'type' => 'bonus',
+                'description' => "Admin unlimited access: {$description}",
+                'reference_type' => $refType,
+                'reference_id' => $refId,
+            ]);
+        }
+
         $this->decrement('credits', $amount);
 
         return $this->creditTransactions()->create([

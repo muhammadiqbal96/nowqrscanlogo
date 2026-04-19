@@ -19,6 +19,7 @@ class ScanLogo extends Model
         'shape',
         'animation',
         'color',
+        'wrapper_color',
         'cta_text',
         'center_logo_path',
         'safe_scan_badge',

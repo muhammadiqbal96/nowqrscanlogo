@@ -6,11 +6,13 @@ import {
 } from 'lucide-react'
 import { scanLogoApi, analyticsApi } from '@/lib/api'
 import ScanLogoPreview, { type ScanLogoPreviewRef } from '@/components/ScanLogoPreview'
+import { useAuth } from '@/context/AuthContext'
 import toast from 'react-hot-toast'
 
 export default function ScanLogoDetailPage() {
     const { id } = useParams()
     const navigate = useNavigate()
+    const { user } = useAuth()
     const qrPreviewRef = useRef<ScanLogoPreviewRef>(null)
     const [scanLogo, setScanLogo] = useState<any>(null)
     const [analytics, setAnalytics] = useState<any>(null)
@@ -50,7 +52,7 @@ export default function ScanLogoDetailPage() {
             await scanLogoApi.update(Number(id), { destination_url: destinationUrl })
             await loadData()
             setEditing(false)
-            toast.success('Destination URL updated (1 credit)')
+            toast.success(user?.is_admin ? 'Destination URL updated (Admin free)' : 'Destination URL updated (1 credit)')
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Failed to update')
         } finally {
@@ -147,7 +149,11 @@ export default function ScanLogoDetailPage() {
                                         {scanLogo.destination_url} <ExternalLink className="w-3 h-3 flex-shrink-0" />
                                     </a>
                                 )}
-                                <p className="text-[10px] text-muted-foreground mt-1">Dynamic — change anytime, QR stays the same (1 credit)</p>
+                                <p className="text-[10px] text-muted-foreground mt-1">
+                                    {user?.is_admin
+                                        ? 'Dynamic — change anytime, QR stays the same (Admin free)'
+                                        : 'Dynamic — change anytime, QR stays the same (1 credit)'}
+                                </p>
                             </div>
 
                             {/* Short URL */}
@@ -219,6 +225,7 @@ export default function ScanLogoDetailPage() {
                             shape={scanLogo.shape}
                             animation={scanLogo.animation}
                             color={scanLogo.color}
+                            wrapperColor={scanLogo.wrapper_color || scanLogo.color}
                             ctaText={scanLogo.cta_text}
                             safeScanBadge={scanLogo.safe_scan_badge}
                             centerLogoUrl={scanLogo.center_logo_path ? `/storage/${scanLogo.center_logo_path}` : null}

@@ -208,6 +208,7 @@ class CampaignController extends Controller
                     'shape' => $sl->shape,
                     'animation' => $sl->animation,
                     'color' => $sl->color,
+                    'wrapper_color' => $sl->wrapper_color,
                     'cta_text' => $sl->cta_text,
                     'safe_scan_badge' => $sl->safe_scan_badge,
                     'center_logo_path' => $sl->center_logo_path,

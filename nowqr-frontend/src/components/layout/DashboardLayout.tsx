@@ -31,6 +31,9 @@ export default function DashboardLayout() {
     const location = useLocation()
     const navigate = useNavigate()
     const [sidebarOpen, setSidebarOpen] = useState(false)
+    const isAdmin = !!user?.is_admin
+    const creditLabel = isAdmin ? 'Unlimited' : String(user?.credits ?? 0)
+    const creditBarWidth = isAdmin ? '100%' : `${Math.min((user?.credits ?? 0) / 6, 100)}%`
 
     const handleLogout = async () => {
         await logout()
@@ -98,14 +101,18 @@ export default function DashboardLayout() {
                 <div className="bg-muted rounded-xl p-3">
                     <div className="flex items-center justify-between mb-1">
                         <span className="text-xs text-muted-foreground">Credits</span>
-                        <span className="text-xs font-bold text-primary">{user?.credits ?? 0}</span>
+                        <span className="text-xs font-bold text-primary">{creditLabel}</span>
                     </div>
                     <div className="w-full h-1.5 bg-background rounded-full overflow-hidden">
-                        <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min((user?.credits ?? 0) / 6, 100)}%` }} />
+                        <div className="h-full bg-primary rounded-full" style={{ width: creditBarWidth }} />
                     </div>
-                    <Link to="/dashboard/credits" className="block text-xs text-primary font-medium mt-2 hover:underline">
-                        Buy more credits
-                    </Link>
+                    {isAdmin ? (
+                        <p className="text-xs text-primary font-medium mt-2">Admin account has unlimited usage</p>
+                    ) : (
+                        <Link to="/dashboard/credits" className="block text-xs text-primary font-medium mt-2 hover:underline">
+                            Buy more credits
+                        </Link>
+                    )}
                 </div>
             </div>
 

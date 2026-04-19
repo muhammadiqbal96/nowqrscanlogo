@@ -114,7 +114,9 @@ export default function SettingsPage() {
                     <div>
                         <p className="font-semibold">{user?.full_name}</p>
                         <p className="text-sm text-muted-foreground">{user?.email}</p>
-                        <p className="text-xs text-primary capitalize mt-0.5">{user?.plan} plan · {user?.credits} credits</p>
+                        <p className="text-xs text-primary capitalize mt-0.5">
+                            {user?.plan} plan · {user?.is_admin ? 'Unlimited credits' : `${user?.credits ?? 0} credits`}
+                        </p>
                     </div>
                 </div>
             </div>

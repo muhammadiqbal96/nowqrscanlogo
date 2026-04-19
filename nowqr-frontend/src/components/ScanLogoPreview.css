@@ -1,4 +1,4 @@
-/* ─── ScanLogo Preview Animations ─────────────────────────── */
+/* Wrapper-first ScanLogo motion system: QR + shape stay static, animations happen around the wrapper. */
 
 .scanlogo-preview-wrapper {
     display: flex;
@@ -6,8 +6,205 @@
     align-items: center;
 }
 
+.scanlogo-container {
+    position: relative;
+    isolation: isolate;
+    overflow: visible;
+}
+
+.scanlogo-wrapper-shell {
+    position: absolute;
+    inset: -1.8%;
+    border-radius: 999px;
+    z-index: 0;
+    pointer-events: none;
+    border: 1.5px solid rgba(255, 255, 255, 0.35);
+    background:
+        radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.28), transparent 58%),
+        linear-gradient(145deg, var(--scanlogo-wrapper-gradient-start, #0ea5e9), var(--scanlogo-wrapper-gradient-end, #0284c7));
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.18);
+}
+
+.scanlogo-shape {
+    overflow: visible;
+    pointer-events: none;
+}
+
+.scanlogo-shape-inner {
+    filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.14));
+}
+
+.scanlogo-qr-core {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 2px solid var(--scanlogo-wrapper-inner-ring, rgba(255, 255, 255, 0.45));
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.scanlogo-brand-ribbon {
+    position: absolute;
+    z-index: 6;
+    top: -10%;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 82%;
+    padding: 0.18em 0.9em;
+    border-radius: 999px;
+    border: 2px solid rgba(255, 255, 255, 0.68);
+    background: linear-gradient(135deg, var(--scanlogo-wrapper-gradient-start, #0ea5e9), var(--scanlogo-wrapper-gradient-end, #0284c7));
+    color: var(--scanlogo-top-text, #ffffff);
+    text-shadow: 0 1px 2px rgba(15, 23, 42, 0.3);
+    font-size: var(--scanlogo-ribbon-font-size, 12px);
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.25);
+}
+
+.scanlogo-orbit-ring {
+    position: absolute;
+    inset: -7%;
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0;
+}
+
+.scanlogo-orbit-guide {
+    fill: none;
+    stroke: var(--scanlogo-wrapper-accent, #facc15);
+    stroke-width: 1.2;
+    stroke-linecap: round;
+    stroke-dasharray: 1.5 3.3;
+    opacity: 0.72;
+}
+
+.scanlogo-orbit-guide-secondary {
+    stroke: rgba(255, 255, 255, 0.52);
+    stroke-width: 1;
+    stroke-dasharray: 1.2 2.8;
+    opacity: 0.5;
+}
+
+.scanlogo-orbit-ring-text {
+    fill: var(--scanlogo-top-text, #ffffff);
+    font-size: var(--scanlogo-orbit-font-size-primary, 5px);
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    paint-order: stroke;
+    stroke: var(--scanlogo-orbit-stroke, rgba(15, 23, 42, 0.45));
+    stroke-width: 0.55;
+    filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.18));
+}
+
+.scanlogo-orbit-ring-text-secondary {
+    font-size: var(--scanlogo-orbit-font-size-secondary, 4.2px);
+    opacity: 0.86;
+}
+
+.scanlogo-bubble-layer {
+    position: absolute;
+    inset: -4%;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.scanlogo-bubble {
+    position: absolute;
+    width: 9%;
+    aspect-ratio: 1 / 1;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    background: var(--scanlogo-bubble-color, rgba(255, 255, 255, 0.34));
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+    opacity: 0;
+}
+
+.bubble-1 {
+    left: 10%;
+    bottom: 18%;
+}
+
+.bubble-2 {
+    left: 20%;
+    bottom: 5%;
+}
+
+.bubble-3 {
+    right: 16%;
+    bottom: 11%;
+}
+
+.bubble-4 {
+    right: 7%;
+    bottom: 26%;
+}
+
+.bubble-5 {
+    left: 45%;
+    bottom: 0;
+}
+
+.scanlogo-bubble-cta {
+    position: absolute;
+    z-index: 7;
+    top: -13%;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 88%;
+    min-width: 56%;
+    padding: 0.28em 0.75em;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #0f172a;
+    font-size: var(--scanlogo-bubble-font-size, 11px);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.1;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.28);
+    opacity: 0;
+}
+
+.scanlogo-bubble-cta::before {
+    content: '';
+    position: absolute;
+    left: calc(50% + 6px);
+    top: calc(100% + 2px);
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow:
+        8px 5px 0 -1px rgba(255, 255, 255, 0.88),
+        16px 12px 0 -2px rgba(255, 255, 255, 0.78);
+    opacity: 0.95;
+}
+
+.scanlogo-bubble-cta::after {
+    content: '';
+    position: absolute;
+    left: 65%;
+    top: calc(100% + 18px);
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.16);
+}
+
 .scanlogo-cta-text {
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.12em;
@@ -18,17 +215,11 @@
     color: var(--scanlogo-label-text-dark, #e2e8f0);
 }
 
-.scanlogo-short-url {
-    font-size: 10px;
-    color: var(--muted-foreground, #888);
-    margin-top: 2px;
-}
-
 .scanlogo-safe-badge {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 10px;
+    font-size: 11px;
     color: #16a34a;
     background: rgba(34, 197, 94, 0.1);
     padding: 5px 12px;
@@ -36,213 +227,337 @@
     margin-top: 10px;
 }
 
-/* ─── Spin ─────────────────────────────────────────────────── */
-.scanlogo-anim-spin {
-    animation: scanlogo-spin 6s linear infinite;
+.scanlogo-compact .scanlogo-brand-ribbon,
+.scanlogo-compact .scanlogo-orbit-ring,
+.scanlogo-compact .scanlogo-bubble-layer,
+.scanlogo-compact .scanlogo-bubble-cta {
+    display: none;
 }
 
-@keyframes scanlogo-spin {
-    0% {
+.scanlogo-mode-spin .scanlogo-orbit-ring-primary {
+    opacity: 1;
+    animation: scanlogo-ring-rotate 6.8s linear infinite;
+}
+
+.scanlogo-mode-spin .scanlogo-brand-ribbon {
+    animation: scanlogo-ribbon-float 2.8s ease-in-out infinite;
+}
+
+.scanlogo-mode-orbit .scanlogo-orbit-ring-primary {
+    opacity: 1;
+    animation: scanlogo-ring-rotate 6.2s linear infinite;
+}
+
+.scanlogo-mode-orbit .scanlogo-orbit-ring-secondary {
+    opacity: 0.95;
+    animation: scanlogo-ring-rotate-reverse 5.2s linear infinite;
+}
+
+.scanlogo-mode-orbit .scanlogo-orbit-guide {
+    animation: scanlogo-orbit-dash 1.9s linear infinite;
+}
+
+.scanlogo-mode-orbit .scanlogo-orbit-guide-secondary {
+    animation: scanlogo-orbit-dash-reverse 1.7s linear infinite;
+}
+
+.scanlogo-mode-orbit .scanlogo-brand-ribbon {
+    animation: scanlogo-ribbon-float 2.5s ease-in-out infinite;
+}
+
+.scanlogo-mode-pulse .scanlogo-bubble {
+    animation: scanlogo-bubble-rise 2.9s ease-in-out infinite;
+}
+
+.scanlogo-mode-pulse .bubble-2 {
+    animation-delay: 0.35s;
+}
+
+.scanlogo-mode-pulse .bubble-3 {
+    animation-delay: 0.7s;
+}
+
+.scanlogo-mode-pulse .bubble-4 {
+    animation-delay: 1.05s;
+}
+
+.scanlogo-mode-pulse .bubble-5 {
+    animation-delay: 1.45s;
+}
+
+.scanlogo-mode-pulse .scanlogo-bubble-cta {
+    opacity: 1;
+    animation: scanlogo-cta-pop 2.7s ease-in-out infinite;
+}
+
+.scanlogo-mode-expand .scanlogo-bubble-cta {
+    opacity: 1;
+    animation: scanlogo-cta-expand 2.4s ease-in-out infinite;
+}
+
+.scanlogo-mode-expand .scanlogo-brand-ribbon {
+    animation: scanlogo-ribbon-float 2.4s ease-in-out infinite;
+}
+
+.scanlogo-mode-bounce .scanlogo-bubble {
+    animation: scanlogo-bubble-pop 2.15s ease-in-out infinite;
+}
+
+.scanlogo-mode-bounce .bubble-2 {
+    animation-delay: 0.2s;
+}
+
+.scanlogo-mode-bounce .bubble-3 {
+    animation-delay: 0.45s;
+}
+
+.scanlogo-mode-bounce .bubble-4 {
+    animation-delay: 0.75s;
+}
+
+.scanlogo-mode-bounce .bubble-5 {
+    animation-delay: 1.1s;
+}
+
+.scanlogo-mode-bounce .scanlogo-bubble-cta {
+    opacity: 1;
+    animation: scanlogo-cta-bounce 2.15s ease-in-out infinite;
+}
+
+.scanlogo-mode-glow .scanlogo-wrapper-shell {
+    animation: scanlogo-wrapper-glow 2.6s ease-in-out infinite;
+}
+
+.scanlogo-mode-glow .scanlogo-orbit-ring-primary {
+    opacity: 1;
+}
+
+.scanlogo-mode-glow .scanlogo-orbit-guide {
+    stroke-dasharray: none;
+    opacity: 0.58;
+}
+
+.scanlogo-mode-flash .scanlogo-brand-ribbon {
+    animation: scanlogo-ribbon-flash 1.8s steps(2, end) infinite;
+}
+
+.scanlogo-mode-flash .scanlogo-bubble {
+    animation: scanlogo-bubble-pop 1.85s ease-in-out infinite;
+}
+
+.scanlogo-mode-flash .bubble-2 {
+    animation-delay: 0.2s;
+}
+
+.scanlogo-mode-flash .bubble-3 {
+    animation-delay: 0.4s;
+}
+
+.scanlogo-mode-flash .bubble-4 {
+    animation-delay: 0.65s;
+}
+
+.scanlogo-mode-flash .bubble-5 {
+    animation-delay: 0.95s;
+}
+
+.scanlogo-mode-flash .scanlogo-bubble-cta {
+    opacity: 1;
+    animation: scanlogo-cta-flash 1.8s steps(2, end) infinite;
+}
+
+.scanlogo-mode-none .scanlogo-animation-node {
+    animation: none !important;
+}
+
+.scanlogo-mode-none .scanlogo-brand-ribbon {
+    opacity: 1;
+}
+
+@keyframes scanlogo-ring-rotate {
+    from {
         transform: rotate(0deg);
     }
 
-    100% {
+    to {
         transform: rotate(360deg);
     }
 }
 
-/* ─── Pulse ────────────────────────────────────────────────── */
-.scanlogo-anim-pulse {
-    animation: scanlogo-pulse 2.5s ease-in-out infinite;
+@keyframes scanlogo-orbit-dash {
+    from {
+        stroke-dashoffset: 0;
+    }
+
+    to {
+        stroke-dashoffset: -22;
+    }
 }
 
-@keyframes scanlogo-pulse {
+@keyframes scanlogo-orbit-dash-reverse {
+    from {
+        stroke-dashoffset: 0;
+    }
 
+    to {
+        stroke-dashoffset: 20;
+    }
+}
+
+@keyframes scanlogo-ring-rotate-reverse {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(-360deg);
+    }
+}
+
+@keyframes scanlogo-ribbon-float {
     0%,
     100% {
-        transform: scale(1);
-        opacity: 1;
+        transform: translateX(-50%) translateY(0);
     }
 
     50% {
-        transform: scale(1.06);
+        transform: translateX(-50%) translateY(-2px);
+    }
+}
+
+@keyframes scanlogo-ribbon-flash {
+    0%,
+    35% {
+        filter: brightness(1);
+    }
+
+    40%,
+    58% {
+        filter: brightness(1.35);
+    }
+
+    60%,
+    100% {
+        filter: brightness(1);
+    }
+}
+
+@keyframes scanlogo-bubble-rise {
+    0% {
+        opacity: 0;
+        transform: translateY(0) scale(0.75);
+    }
+
+    20% {
         opacity: 0.85;
     }
-}
 
-/* ─── Bounce ───────────────────────────────────────────────── */
-.scanlogo-anim-bounce {
-    animation: scanlogo-bounce 2s ease infinite;
-}
+    65% {
+        opacity: 0.75;
+        transform: translateY(-22px) scale(1);
+    }
 
-@keyframes scanlogo-bounce {
-
-    0%,
     100% {
-        transform: translateY(0);
-    }
-
-    30% {
-        transform: translateY(-14px);
-    }
-
-    50% {
-        transform: translateY(0);
-    }
-
-    70% {
-        transform: translateY(-7px);
-    }
-
-    85% {
-        transform: translateY(0);
-    }
-}
-
-/* ─── Expand ───────────────────────────────────────────────── */
-.scanlogo-anim-expand {
-    animation: scanlogo-expand 3s ease-in-out infinite;
-}
-
-@keyframes scanlogo-expand {
-
-    0%,
-    100% {
-        transform: scale(1);
-    }
-
-    50% {
-        transform: scale(1.12);
-    }
-}
-
-/* ─── Glow ─────────────────────────────────────────────────── */
-.scanlogo-anim-glow {
-    animation: none;
-}
-
-.scanlogo-shape {
-    overflow: visible;
-}
-
-.scanlogo-shape-glow {
-    animation: scanlogo-shape-glow 2.5s ease-in-out infinite;
-}
-
-@keyframes scanlogo-shape-glow {
-
-    0%,
-    100% {
-        filter: drop-shadow(0 0 6px var(--scanlogo-glow-color, rgba(200, 64, 26, 0.45)));
-    }
-
-    50% {
-        filter: drop-shadow(0 0 14px var(--scanlogo-glow-color, rgba(200, 64, 26, 0.45))) drop-shadow(0 0 28px var(--scanlogo-glow-color, rgba(200, 64, 26, 0.28)));
-    }
-}
-
-/* ─── None ─────────────────────────────────────────────────── */
-.scanlogo-anim-none {
-    animation: none;
-}
-
-/* ─── Flash (ScanLogo ↔ QR code) ───────────────────────────── */
-/* Overlay flashes in a looping sequence so the animation stays active. */
-.scanlogo-anim-flash {
-    animation: none;
-}
-
-.scanlogo-flash-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2;
-    animation: scanlogo-flash-sequence 4.5s steps(1, end) infinite;
-    pointer-events: none;
-}
-
-.scanlogo-flash-shape {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-}
-
-.scanlogo-flash-overlay .flash-cta-text {
-    color: var(--scanlogo-flash-text-color, #ffffff);
-    font-weight: 800;
-    font-size: var(--scanlogo-flash-font-size, 14px);
-    text-transform: uppercase;
-    letter-spacing: var(--scanlogo-flash-letter-spacing, 0.08em);
-    text-align: center;
-    line-height: 1.1;
-    display: block;
-    width: var(--scanlogo-flash-max-width, 68%);
-    max-width: var(--scanlogo-flash-max-width, 68%);
-    padding: 4px 0;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-    position: relative;
-    z-index: 1;
-}
-
-@keyframes scanlogo-flash-sequence {
-    0% {
-        opacity: 1;
-    }
-
-    /* ScanLogo CTA visible */
-    12% {
-        opacity: 1;
-    }
-
-    16% {
         opacity: 0;
+        transform: translateY(-34px) scale(1.15);
     }
+}
 
-    /* → QR shows */
-    28% {
+@keyframes scanlogo-bubble-pop {
+    0%,
+    100% {
         opacity: 0;
+        transform: scale(0.6);
     }
 
-    32% {
-        opacity: 1;
+    35% {
+        opacity: 0.88;
+        transform: scale(1.15);
     }
 
-    /* → ScanLogo flash 1 */
-    44% {
-        opacity: 1;
+    55% {
+        opacity: 0.88;
+        transform: scale(0.9);
+    }
+
+    78% {
+        opacity: 0;
+        transform: scale(0.4);
+    }
+}
+
+@keyframes scanlogo-cta-pop {
+    0%,
+    100% {
+        transform: translateX(-50%) translateY(2px) scale(0.95);
     }
 
     48% {
-        opacity: 0;
+        transform: translateX(-50%) translateY(-6px) scale(1.06);
     }
+}
 
-    /* → QR shows */
-    58% {
-        opacity: 0;
-    }
-
-    62% {
-        opacity: 1;
-    }
-
-    /* → ScanLogo flash 2 */
-    72% {
-        opacity: 1;
-    }
-
-    76% {
-        opacity: 0;
-    }
-
-    /* → QR (final) */
+@keyframes scanlogo-cta-expand {
+    0%,
     100% {
-        opacity: 0;
+        transform: translateX(-50%) translateY(0) scale(0.92);
+        opacity: 0.92;
     }
 
-    /* stays hidden = QR visible */
+    35% {
+        transform: translateX(-50%) translateY(-8px) scale(1.08);
+        opacity: 1;
+    }
+
+    65% {
+        transform: translateX(-50%) translateY(-5px) scale(1.03);
+        opacity: 1;
+    }
+}
+
+@keyframes scanlogo-cta-bounce {
+    0%,
+    100% {
+        transform: translateX(-50%) translateY(0);
+    }
+
+    25% {
+        transform: translateX(-50%) translateY(-10px);
+    }
+
+    50% {
+        transform: translateX(-50%) translateY(0);
+    }
+
+    72% {
+        transform: translateX(-50%) translateY(-5px);
+    }
+}
+
+@keyframes scanlogo-cta-flash {
+    0%,
+    34% {
+        opacity: 0.3;
+    }
+
+    35%,
+    58% {
+        opacity: 1;
+    }
+
+    59%,
+    100% {
+        opacity: 0.42;
+    }
+}
+
+@keyframes scanlogo-wrapper-glow {
+    0%,
+    100% {
+        box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.09), 0 0 16px var(--scanlogo-glow-color, rgba(56, 189, 248, 0.35));
+    }
+
+    50% {
+        box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.16), 0 0 28px var(--scanlogo-glow-color, rgba(56, 189, 248, 0.45));
+    }
 }

@@ -33,12 +33,17 @@ class ScanLogoController extends Controller
         $validated = $request->validate([
             'campaign_id' => ['nullable', 'exists:campaigns,id'],
             'destination_url' => ['required', 'url', 'max:2048'],
-            'shape' => ['sometimes', 'in:shield,circle,gear,eye,diamond,hexagon,square'],
-            'animation' => ['sometimes', 'in:spin,pulse,expand,bounce,glow,flash,none'],
+            'shape' => ['sometimes', 'in:shield,circle,gear,eye,diamond,hexagon,square,drum,tv'],
+            'animation' => ['sometimes', 'in:spin,pulse,expand,bounce,glow,flash,orbit,none'],
             'color' => ['sometimes', 'string', 'max:20'],
+            'wrapper_color' => ['sometimes', 'string', 'max:20'],
             'cta_text' => ['sometimes', 'string', 'max:50'],
             'safe_scan_badge' => ['sometimes', 'boolean'],
         ]);
+
+        if (!array_key_exists('wrapper_color', $validated)) {
+            $validated['wrapper_color'] = $validated['color'] ?? '#c8401a';
+        }
 
         // Check credits (3 credits to create a ScanLogo)
         $user = $request->user();
@@ -96,9 +101,10 @@ class ScanLogoController extends Controller
 
         $validated = $request->validate([
             'destination_url' => ['sometimes', 'url', 'max:2048'],
-            'shape' => ['sometimes', 'in:shield,circle,gear,eye,diamond,hexagon,square'],
-            'animation' => ['sometimes', 'in:spin,pulse,expand,bounce,glow,flash,none'],
+            'shape' => ['sometimes', 'in:shield,circle,gear,eye,diamond,hexagon,square,drum,tv'],
+            'animation' => ['sometimes', 'in:spin,pulse,expand,bounce,glow,flash,orbit,none'],
             'color' => ['sometimes', 'string', 'max:20'],
+            'wrapper_color' => ['sometimes', 'string', 'max:20'],
             'cta_text' => ['sometimes', 'string', 'max:50'],
             'safe_scan_badge' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
@@ -175,6 +181,8 @@ class ScanLogoController extends Controller
                 ['value' => 'diamond', 'label' => 'Diamond', 'description' => 'A premium diamond shape'],
                 ['value' => 'hexagon', 'label' => 'Hexagon', 'description' => 'A modern hexagonal shape'],
                 ['value' => 'square', 'label' => 'Square', 'description' => 'A classic square shape'],
+                ['value' => 'drum', 'label' => 'Drum', 'description' => 'A concert-style drum rim shape'],
+                ['value' => 'tv', 'label' => 'TV', 'description' => 'A TV-friendly rounded display frame'],
             ],
             'animations' => [
                 ['value' => 'spin', 'label' => 'Spin', 'description' => 'Rotates continuously'],
@@ -183,6 +191,7 @@ class ScanLogoController extends Controller
                 ['value' => 'bounce', 'label' => 'Bounce', 'description' => 'Bounces up and down'],
                 ['value' => 'glow', 'label' => 'Glow', 'description' => 'Glows with a halo effect'],
                 ['value' => 'flash', 'label' => 'Flash', 'description' => 'CTA flashes into QR'],
+                ['value' => 'orbit', 'label' => 'Orbit', 'description' => 'Moves with a smooth orbital loop'],
                 ['value' => 'none', 'label' => 'None', 'description' => 'No animation'],
             ],
         ]);

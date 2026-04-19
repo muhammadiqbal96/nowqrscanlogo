@@ -117,6 +117,7 @@ export const scanLogoApi = {
     shape?: string;
     animation?: string;
     color?: string;
+    wrapper_color?: string;
     cta_text?: string;
     safe_scan_badge?: boolean;
   }) => api.post('/scanlogos', data),

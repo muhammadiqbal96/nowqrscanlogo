@@ -5,6 +5,7 @@ import {
     ChevronRight, FileText, Wand2,
 } from 'lucide-react'
 import { campaignApi, scanLogoApi, aiApi } from '@/lib/api'
+import { useAuth } from '@/context/AuthContext'
 import toast from 'react-hot-toast'
 
 /* ═══════════════════════════════════════════════════════════════
@@ -663,6 +664,7 @@ function buildCanvasElements(
 export default function TemplateSelectionPage() {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
+    const { user } = useAuth()
     const [searchParams] = useSearchParams()
     const isFlyer = searchParams.get('type') === 'flyer'
 
@@ -928,7 +930,7 @@ export default function TemplateSelectionPage() {
                         </button>
                     </div>
 
-                    <p className="text-[10px] text-muted-foreground text-center">Uses 5 credits to generate AI content</p>
+                    <p className="text-[10px] text-muted-foreground text-center">{user?.is_admin ? 'Admin: no credits charged' : 'Uses 5 credits to generate AI content'}</p>
                 </div>
             </div>
         )
