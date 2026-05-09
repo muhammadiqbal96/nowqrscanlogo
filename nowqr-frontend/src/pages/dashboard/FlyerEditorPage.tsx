@@ -200,11 +200,7 @@ export default function FlyerEditorPage() {
                                 if (parsed.bgColor) setBgColor(parsed.bgColor)
                                 if (parsed.bgImage) setBgImage(parsed.bgImage)
                                 if (parsed.bgTemplate !== undefined) setBgTemplate(parsed.bgTemplate)
-                                if (parsed.aspectRatio) {
-                                    setAspectRatio(parsed.aspectRatio as AspectRatio)
-                                    const savedSize = CANVAS_SIZES[parsed.aspectRatio as AspectRatio]
-                                    if (savedSize) prevCanvasSizeRef.current = savedSize
-                                }
+                                if (parsed.aspectRatio) setAspectRatio(parsed.aspectRatio as AspectRatio)
                                 if (parsed.qrScanLogoMap) setQrScanLogoMap(parsed.qrScanLogoMap)
                             } else {
                                 populateFromCampaign(camp)
@@ -219,15 +215,7 @@ export default function FlyerEditorPage() {
                             if (design.bgColor) setBgColor(design.bgColor)
                             if (design.bgImage) setBgImage(design.bgImage)
                             if (design.bgTemplate !== undefined) setBgTemplate(design.bgTemplate)
-                            if (design.aspectRatio) {
-                                setAspectRatio(design.aspectRatio as AspectRatio)
-                                // Sync the ref so the remap effect doesn't rescale elements
-                                // that were already saved in this ratio's coordinate space.
-                                const savedSize = CANVAS_SIZES[design.aspectRatio as AspectRatio]
-                                if (savedSize) {
-                                    prevCanvasSizeRef.current = savedSize
-                                }
-                            }
+                            if (design.aspectRatio) setAspectRatio(design.aspectRatio as AspectRatio)
                             if (design.qrScanLogoMap) setQrScanLogoMap(design.qrScanLogoMap)
                         } else {
                             populateFromCampaign(camp)
@@ -431,6 +419,21 @@ export default function FlyerEditorPage() {
 
     const updateElement = (id: string, updates: Partial<FlyerElement>) => {
         setElements(prev => prev.map(el => el.id === id ? { ...el, ...updates } : el))
+    }
+
+    const updateNumericElement = (
+        id: string,
+        key: keyof Pick<FlyerElement, 'x' | 'y' | 'width' | 'height' | 'fontSize' | 'borderRadius' | 'opacity'>,
+        rawValue: string,
+        options?: { min?: number }
+    ) => {
+        if (rawValue.trim() === '') return
+
+        const nextValue = Number(rawValue)
+        if (!Number.isFinite(nextValue)) return
+
+        const clampedValue = typeof options?.min === 'number' ? Math.max(options.min, nextValue) : nextValue
+        updateElement(id, { [key]: clampedValue } as Partial<FlyerElement>)
     }
 
     const deleteElement = (id: string) => {
@@ -789,7 +792,11 @@ export default function FlyerEditorPage() {
     /* ─── Keyboard shortcuts ─────────────────────────────────── */
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null
+            const isEditableTarget = !!target?.closest('input, textarea, select, [contenteditable="true"]')
+
             if (editingTextId) return // don't intercept while typing
+            if (isEditableTarget) return
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 if (selectedId) deleteElement(selectedId)
             }
@@ -1251,22 +1258,22 @@ export default function FlyerEditorPage() {
                                     <div className="grid grid-cols-2 gap-1.5">
                                         <div>
                                             <label className="text-[10px] text-muted-foreground">X</label>
-                                            <input type="number" value={Math.round(selected.x)} onChange={e => updateElement(selected.id, { x: +e.target.value })}
+                                            <input type="number" value={Math.round(selected.x)} onChange={e => updateNumericElement(selected.id, 'x', e.currentTarget.value)}
                                                 className="w-full px-2 py-1 text-xs border border-border rounded bg-background" />
                                         </div>
                                         <div>
                                             <label className="text-[10px] text-muted-foreground">Y</label>
-                                            <input type="number" value={Math.round(selected.y)} onChange={e => updateElement(selected.id, { y: +e.target.value })}
+                                            <input type="number" value={Math.round(selected.y)} onChange={e => updateNumericElement(selected.id, 'y', e.currentTarget.value)}
                                                 className="w-full px-2 py-1 text-xs border border-border rounded bg-background" />
                                         </div>
                                         <div>
                                             <label className="text-[10px] text-muted-foreground">W</label>
-                                            <input type="number" value={Math.round(selected.width)} onChange={e => updateElement(selected.id, { width: +e.target.value })}
+                                            <input type="number" min={1} value={Math.round(selected.width)} onChange={e => updateNumericElement(selected.id, 'width', e.currentTarget.value, { min: 1 })}
                                                 className="w-full px-2 py-1 text-xs border border-border rounded bg-background" />
                                         </div>
                                         <div>
                                             <label className="text-[10px] text-muted-foreground">H</label>
-                                            <input type="number" value={Math.round(selected.height)} onChange={e => updateElement(selected.id, { height: +e.target.value })}
+                                            <input type="number" min={1} value={Math.round(selected.height)} onChange={e => updateNumericElement(selected.id, 'height', e.currentTarget.value, { min: 1 })}
                                                 className="w-full px-2 py-1 text-xs border border-border rounded bg-background" />
                                         </div>
                                     </div>
@@ -1289,7 +1296,7 @@ export default function FlyerEditorPage() {
                                             </Select>
                                             <div className="flex items-center gap-1.5">
                                                 <input type="number" min={12} max={200} value={selected.fontSize || 32}
-                                                    onChange={e => updateElement(selected.id, { fontSize: +e.target.value })}
+                                                    onChange={e => updateNumericElement(selected.id, 'fontSize', e.currentTarget.value, { min: 12 })}
                                                     className="w-16 px-2 py-1 text-xs border border-border rounded bg-background" />
                                                 <button onClick={() => updateElement(selected.id, { fontWeight: selected.fontWeight === '700' ? '400' : '700' })}
                                                     className={`p-1 rounded border ${selected.fontWeight === '700' || selected.fontWeight === '800' ? 'bg-primary/10 border-primary text-primary' : 'border-border'}`}>
@@ -1336,13 +1343,13 @@ export default function FlyerEditorPage() {
                                         <div>
                                             <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Corner Radius</p>
                                             <input type="range" min={0} max={200} value={selected.borderRadius || 0}
-                                                onChange={e => updateElement(selected.id, { borderRadius: +e.target.value })}
+                                                onChange={e => updateNumericElement(selected.id, 'borderRadius', e.currentTarget.value, { min: 0 })}
                                                 className="w-full" />
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Opacity</p>
                                             <input type="range" min={0} max={100} value={(selected.opacity ?? 1) * 100}
-                                                onChange={e => updateElement(selected.id, { opacity: +e.target.value / 100 })}
+                                                onChange={e => updateNumericElement(selected.id, 'opacity', String(Number(e.currentTarget.value) / 100), { min: 0 })}
                                                 className="w-full" />
                                         </div>
                                     </>
@@ -1367,7 +1374,7 @@ export default function FlyerEditorPage() {
                                         <div>
                                             <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Corner Radius</p>
                                             <input type="range" min={0} max={200} value={selected.borderRadius || 0}
-                                                onChange={e => updateElement(selected.id, { borderRadius: +e.target.value })}
+                                                onChange={e => updateNumericElement(selected.id, 'borderRadius', e.currentTarget.value, { min: 0 })}
                                                 className="w-full" />
                                         </div>
                                     </>

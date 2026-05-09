@@ -86,7 +86,7 @@ export default function CampaignsListPage() {
                         <div key={campaign.id} className="bg-card border border-border rounded-2xl p-5 flex items-center justify-between group hover:shadow-md transition-all">
                             <Link to={`/dashboard/campaigns/${campaign.id}`} className="flex-1 min-w-0">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
                                         <Megaphone className="w-5 h-5" />
                                     </div>
                                     <div className="min-w-0">
@@ -138,7 +138,7 @@ export default function CampaignsListPage() {
                     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !deleting && setDeleteModal(null)} />
                     <div className="relative bg-card border border-border rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+                            <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
                                 <AlertTriangle className="w-5 h-5 text-destructive" />
                             </div>
                             <div>

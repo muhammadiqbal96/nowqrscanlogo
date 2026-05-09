@@ -128,13 +128,14 @@ class TemplateController extends Controller
     private function buildTemplatePrompt(array $data): string
     {
         $category = $data['category'] ?? 'general';
+        $targetAudience = $data['target_audience'] ?? 'General audience';
 
         return <<<PROMPT
 Generate 6 unique poster/flyer template suggestions for a business.
 
 Business: {$data['business_name']}
 Description: {$data['business_description']}
-Target Audience: {$data['target_audience']}
+Target Audience: {$targetAudience}
 CTA Type: {$data['cta_type']}
 Category preference: {$category}
 

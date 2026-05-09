@@ -95,7 +95,7 @@ function getOrbitTextLayout(
     orbitRadius = 44,
     minFontSize = 7,
     maxFontSize = 9
-): { text: string; fontSizePx: number } {
+): { text: string; fontSizePx: number; circumference: number } {
     const orbitUnit = `${ctaText} • `
     const circumference = 2 * Math.PI * orbitRadius
 
@@ -123,9 +123,15 @@ function getOrbitTextLayout(
         }
     }
 
+    // Guarantee enough characters to cover the full ring even on mobile/font fallback differences.
+    const unitWidthAtBest = orbitUnit.length * bestFontSize * (avgGlyphAdvanceEm + trackingEm)
+    const minRepeatCount = Math.max(8, Math.ceil(circumference / Math.max(unitWidthAtBest, 1)) + 2)
+    bestText = orbitUnit.repeat(minRepeatCount)
+
     return {
         text: bestText,
         fontSizePx: Number(bestFontSize.toFixed(2)),
+        circumference,
     }
 }
 
@@ -547,7 +553,14 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                             </defs>
                             <circle className="scanlogo-orbit-guide" cx="50" cy="50" r="42" />
                             <text className="scanlogo-orbit-ring-text">
-                                <textPath href={`#${orbitPathPrimaryId}`} startOffset="0%">{orbitPrimaryText}</textPath>
+                                <textPath
+                                    href={`#${orbitPathPrimaryId}`}
+                                    startOffset="0%"
+                                    lengthAdjust="spacingAndGlyphs"
+                                    textLength={orbitPrimaryLayout.circumference}
+                                >
+                                    {orbitPrimaryText}
+                                </textPath>
                             </text>
                         </svg>
 
@@ -557,7 +570,14 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                             </defs>
                             <circle className="scanlogo-orbit-guide scanlogo-orbit-guide-secondary" cx="50" cy="50" r="36" />
                             <text className="scanlogo-orbit-ring-text scanlogo-orbit-ring-text-secondary">
-                                <textPath href={`#${orbitPathSecondaryId}`} startOffset="8%">{orbitSecondaryText}</textPath>
+                                <textPath
+                                    href={`#${orbitPathSecondaryId}`}
+                                    startOffset="0%"
+                                    lengthAdjust="spacingAndGlyphs"
+                                    textLength={orbitSecondaryLayout.circumference}
+                                >
+                                    {orbitSecondaryText}
+                                </textPath>
                             </text>
                         </svg>
 

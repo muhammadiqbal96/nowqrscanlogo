@@ -436,7 +436,7 @@ function TemplateMiniPreview({ preset }: { preset: TemplatePreset }) {
     const p = (v: number, max: number) => `${(v / max) * 100}%`
 
     return (
-        <div className="aspect-[9/16] relative overflow-hidden rounded-t-xl"
+        <div className="aspect-9/16 relative overflow-hidden rounded-t-xl"
             style={{ background: preset.bgImage ? `url(${preset.bgImage}) center/cover` : preset.bg, fontFamily: `'${preset.font}', sans-serif` }}>
             {/* Decorative shapes */}
             {preset.shapes?.map((s, i) => (
@@ -491,13 +491,13 @@ function TemplateMiniPreview({ preset }: { preset: TemplatePreset }) {
             </div>
             {/* Feature bullets preview */}
             {preset.features && (
-                <div className="absolute flex flex-col gap-[1px]" style={{
+                <div className="absolute flex flex-col gap-px" style={{
                     left: p(preset.features.x, W), top: p(preset.features.y, H),
                     width: p(preset.features.w, W), height: p(preset.features.h, H),
                 }}>
                     {[0, 1, 2].map(i => (
-                        <div key={i} className="flex items-center gap-[2px]">
-                            <div className="rounded-full flex-shrink-0" style={{
+                        <div key={i} className="flex items-center gap-0.5">
+                            <div className="rounded-full shrink-0" style={{
                                 width: 2, height: 2,
                                 backgroundColor: preset.features!.dotColor,
                             }} />
@@ -780,10 +780,26 @@ export default function TemplateSelectionPage() {
         try {
             const canvasElements = buildCanvasElements(preset, content, campaign.business_name || '')
             const qrMap: Record<string, number> = {}
-            const firstScanLogo = scanLogos[0]
+            const qrConfigMap: Record<string, any> = {}
+            const firstScanLogo = scanLogos.find((logo: any) => Number(logo.campaign_id) === Number(campaign.id)) || scanLogos[0]
             if (firstScanLogo) {
                 const qrEl = canvasElements.find((e: any) => e.type === 'qr')
-                if (qrEl) qrMap[qrEl.id] = firstScanLogo.id
+                if (qrEl) {
+                    qrMap[qrEl.id] = firstScanLogo.id
+                    qrConfigMap[qrEl.id] = {
+                        id: firstScanLogo.id,
+                        short_url: firstScanLogo.short_url,
+                        destination_url: firstScanLogo.destination_url,
+                        shape: firstScanLogo.shape,
+                        animation: firstScanLogo.animation,
+                        color: firstScanLogo.color,
+                        wrapper_color: firstScanLogo.wrapper_color || firstScanLogo.color,
+                        cta_text: firstScanLogo.cta_text,
+                        safe_scan_badge: !!firstScanLogo.safe_scan_badge,
+                        center_logo_url: firstScanLogo.center_logo_url
+                            || (firstScanLogo.center_logo_path ? `/storage/${String(firstScanLogo.center_logo_path).replace(/^\/+/, '')}` : null),
+                    }
+                }
             }
 
             const canvasState = {
@@ -793,6 +809,7 @@ export default function TemplateSelectionPage() {
                 bgTemplate: null,
                 aspectRatio: '9:16' as const,
                 qrScanLogoMap: qrMap,
+                qrScanLogoConfigMap: qrConfigMap,
             }
 
             if (isFlyer) {
@@ -868,7 +885,7 @@ export default function TemplateSelectionPage() {
                 </button>
 
                 <div className="text-center mb-8">
-                    <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4">
+                    <div className="w-14 h-14 mx-auto rounded-2xl bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4">
                         <FileText className="w-7 h-7 text-white" />
                     </div>
                     <h1 className="text-2xl font-bold">Create a Flyer</h1>
@@ -920,7 +937,7 @@ export default function TemplateSelectionPage() {
                     {/* Actions */}
                     <div className="flex items-center gap-3 pt-2">
                         <button onClick={handleGenerateFlyer} disabled={applying || !flyerDescription.trim()}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-medium text-sm hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 transition-all">
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-linear-to-r from-purple-600 to-pink-600 text-white rounded-xl font-medium text-sm hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 transition-all">
                             {applying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
                             {applying ? 'Generating...' : 'Generate & Pick Template'}
                         </button>
@@ -952,27 +969,27 @@ export default function TemplateSelectionPage() {
             )}
 
             {/* Top bar */}
-            <div className="border-b border-border bg-card px-6 py-4 shrink-0">
-                <div className="flex items-center gap-4">
+            <div className="border-b border-border bg-card px-4 sm:px-6 py-4 shrink-0">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                     <button onClick={() => isFlyer ? setPhase('describe') : navigate('/dashboard/campaigns')}
-                        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
                         <ArrowLeft className="w-4 h-4" /> Back
                     </button>
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-xl font-bold">
+                        <h1 className="text-xl font-bold leading-tight">
                             {isFlyer ? 'Choose a Flyer Template' : 'Choose a Template'}
                         </h1>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="text-xs text-muted-foreground mt-0.5 wrap-break-word">
                             for <span className="font-semibold text-foreground">{campaign.business_name}</span>
                             {' '}&mdash; {campaign.name}
                             {aiContent && (
-                                <span className="ml-2 text-green-600 font-medium">
+                                <span className="ml-0.5 sm:ml-2 text-green-600 font-medium inline-block">
                                     ✓ AI content ready
                                 </span>
                             )}
                         </p>
                     </div>
-                    <div className="relative w-72">
+                    <div className="relative w-full sm:w-72">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <input type="text" placeholder="Search templates..." value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
@@ -985,7 +1002,7 @@ export default function TemplateSelectionPage() {
                     </div>
                 </div>
                 {/* Category tabs */}
-                <div className="flex items-center gap-1.5 mt-4 overflow-x-auto pb-1 -mb-1">
+                <div className="flex items-center gap-1.5 mt-3 sm:mt-4 overflow-x-auto pb-1 -mb-1">
                     {CATEGORIES.map((cat) => {
                         const isActive = activeCategory === cat.id
                         return (
@@ -1002,12 +1019,12 @@ export default function TemplateSelectionPage() {
             </div>
 
             {/* Template grid */}
-            <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 sm:py-6">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
                     {/* Create Blank */}
                     <button onClick={handleCreateBlank}
                         className="group rounded-2xl border-2 border-dashed border-border hover:border-primary/60 overflow-hidden transition-all hover:shadow-lg text-left">
-                        <div className="aspect-[9/16] flex flex-col items-center justify-center bg-muted/30 group-hover:bg-primary/5 transition-colors">
+                        <div className="aspect-9/16 flex flex-col items-center justify-center bg-muted/30 group-hover:bg-primary/5 transition-colors">
                             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3 group-hover:bg-primary/10 transition-colors">
                                 <Plus className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
                             </div>
@@ -1054,7 +1071,7 @@ export default function TemplateSelectionPage() {
             </div>
 
             {/* Bottom bar */}
-            <div className="border-t border-border bg-card/90 backdrop-blur-sm py-3 px-6 flex items-center justify-between shrink-0">
+            <div className="border-t border-border bg-card/90 backdrop-blur-sm py-3 px-4 sm:px-6 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-0 justify-between shrink-0">
                 <p className="text-xs text-muted-foreground">
                     {filtered.length} templates available
                     {activeCategory !== 'all' && ` in ${CATEGORIES.find(c => c.id === activeCategory)?.name || activeCategory}`}

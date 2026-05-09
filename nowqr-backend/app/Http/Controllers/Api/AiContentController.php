@@ -98,12 +98,13 @@ class AiContentController extends Controller
 
     private function buildPrompt(array $data, string $ctaLabel, string $tone): string
     {
+        $targetAudience = $data['target_audience'] ?? 'General audience';
         return <<<PROMPT
 You are a world-class marketing copywriter. Generate ad copy for a small business's promotional page.
 
 Business Name: {$data['business_name']}
 What they offer: {$data['business_description']}
-Target Audience: {$data['target_audience']}
+Target Audience: {$targetAudience}
 Call to Action: {$ctaLabel}
 Tone: {$tone}
 

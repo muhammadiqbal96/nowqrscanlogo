@@ -20,6 +20,46 @@ const CTA_OPTIONS = [
 
 type Step = 'cta' | 'details' | 'ai-generate'
 
+function extractErrorMessage(error: any): string {
+    // Handle Laravel validation errors (errors object with field keys)
+    if (error?.response?.data?.errors && typeof error.response.data.errors === 'object') {
+        const errors = error.response.data.errors
+        const fieldErrors: string[] = []
+        
+        // Field-friendly names
+        const fieldNames: Record<string, string> = {
+            'business_name': 'Business name',
+            'business_description': 'Business description',
+            'target_audience': 'Target audience',
+            'campaign_name': 'Campaign name',
+        }
+        
+        for (const [field, messages] of Object.entries(errors)) {
+            if (Array.isArray(messages) && messages.length > 0) {
+                const fieldLabel = fieldNames[field] || field
+                fieldErrors.push(`${fieldLabel}: ${messages[0]}`)
+            }
+        }
+        
+        if (fieldErrors.length > 0) {
+            return fieldErrors.join('\n')
+        }
+    }
+    
+    // Handle Laravel error message field
+    if (error?.response?.data?.message) {
+        return error.response.data.message
+    }
+    
+    // Handle error details field (sometimes used by Laravel)
+    if (error?.response?.data?.error) {
+        return error.response.data.error
+    }
+    
+    // Fall back to generic error
+    return 'Failed to generate content. Please check your input and try again.'
+}
+
 export default function CampaignBuilderPage() {
     const navigate = useNavigate()
     const [step, setStep] = useState<Step>('cta')
@@ -57,7 +97,6 @@ export default function CampaignBuilderPage() {
         }
 
         setLoading(true)
-        setStep('ai-generate')
 
         try {
             // Create campaign first
@@ -66,7 +105,7 @@ export default function CampaignBuilderPage() {
                 name,
                 business_name: businessName,
                 business_description: businessDescription,
-                target_audience: targetAudience || undefined,
+                ...(targetAudience.trim() ? { target_audience: targetAudience } : {}),
                 cta_type: ctaType,
                 custom_cta: ctaType === 'custom' ? customCta : undefined,
             })
@@ -78,7 +117,7 @@ export default function CampaignBuilderPage() {
                 campaign_id: newCampaignId,
                 business_name: businessName,
                 business_description: businessDescription,
-                target_audience: targetAudience || undefined,
+                ...(targetAudience.trim() ? { target_audience: targetAudience } : {}),
                 cta_type: ctaType,
                 custom_cta: ctaType === 'custom' ? customCta : undefined,
             })
@@ -95,12 +134,15 @@ export default function CampaignBuilderPage() {
                 font_family: fontFamily,
             })
 
+            // Only change step AFTER all API calls succeed
+            setStep('ai-generate')
             toast.success('AI content generated! Choose a template.')
             // Navigate to the standalone template selection page
             navigate(`/dashboard/campaigns/${newCampaignId}/templates`)
         } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Failed to generate content')
-            setStep('details')
+            const errorMessage = extractErrorMessage(err)
+            toast.error(errorMessage)
+            // Step stays on 'details' - no need to explicitly set it
         } finally {
             setLoading(false)
         }
@@ -223,7 +265,7 @@ export default function CampaignBuilderPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium mb-1.5">Who is your target audience?</label>
+                            <label className="block text-sm font-medium mb-1.5">Who is your target audience? <span className="text-muted-foreground">(optional)</span></label>
                             <input
                                 type="text"
                                 placeholder="e.g., Brides-to-be, event planners, gift buyers in Austin TX"
