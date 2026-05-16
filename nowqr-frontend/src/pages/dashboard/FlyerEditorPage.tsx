@@ -135,6 +135,13 @@ export default function FlyerEditorPage() {
     const [leftPanelOpen, setLeftPanelOpen] = useState(false)
     const [rightPanelOpen, setRightPanelOpen] = useState(false)
 
+    // Undo / Redo history
+    const historyRef = useRef<FlyerElement[][]>([])
+    const historyIndexRef = useRef<number>(-1)
+    const [historyIndex, setHistoryIndex] = useState<number>(-1)
+    const isApplyingHistoryRef = useRef(false)
+    const MAX_HISTORY = 50
+
     // Drag state
     const [dragging, setDragging] = useState(false)
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
@@ -460,6 +467,56 @@ export default function FlyerEditorPage() {
             return next
         })
     }
+
+    /* ─── History (undo/redo) ───────────────────────────────── */
+    useEffect(() => {
+        // Initialize history on first render of elements
+        if (historyIndexRef.current === -1) {
+            const snap = JSON.parse(JSON.stringify(elements || []))
+            historyRef.current = [snap]
+            historyIndexRef.current = 0
+            setHistoryIndex(0)
+            return
+        }
+
+        if (isApplyingHistoryRef.current) return
+
+        const snap = JSON.parse(JSON.stringify(elements || []))
+        const curr = historyRef.current[historyIndexRef.current]
+        if (JSON.stringify(curr) === JSON.stringify(snap)) return
+
+        // Trim any redo states
+        historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1)
+        historyRef.current.push(snap)
+        if (historyRef.current.length > MAX_HISTORY) {
+            historyRef.current.shift()
+        }
+        historyIndexRef.current = historyRef.current.length - 1
+        setHistoryIndex(historyIndexRef.current)
+    }, [elements])
+
+    const undo = useCallback(() => {
+        if (historyIndexRef.current <= 0) return
+        isApplyingHistoryRef.current = true
+        historyIndexRef.current -= 1
+        const prev = historyRef.current[historyIndexRef.current] || []
+        setElements(prev)
+        setSelectedId(null)
+        setHistoryIndex(historyIndexRef.current)
+        // release flag on next tick
+        setTimeout(() => { isApplyingHistoryRef.current = false }, 0)
+    }, [])
+
+    const redo = useCallback(() => {
+        if (historyIndexRef.current >= historyRef.current.length - 1) return
+        isApplyingHistoryRef.current = true
+        historyIndexRef.current += 1
+        const next = historyRef.current[historyIndexRef.current] || []
+        setElements(next)
+        setSelectedId(null)
+        setHistoryIndex(historyIndexRef.current)
+        setTimeout(() => { isApplyingHistoryRef.current = false }, 0)
+    }, [])
 
     /* ─── Drag handlers ──────────────────────────────────────── */
     const handlePointerDown = (e: React.PointerEvent, elId: string, forceDrag = false) => {
@@ -810,10 +867,23 @@ export default function FlyerEditorPage() {
                 e.preventDefault()
                 if (selectedId) duplicateElement(selectedId)
             }
+            // Undo / Redo
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+                e.preventDefault()
+                if (e.shiftKey) {
+                    redo()
+                } else {
+                    undo()
+                }
+            }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+                e.preventDefault()
+                redo()
+            }
         }
         window.addEventListener('keydown', handler)
         return () => window.removeEventListener('keydown', handler)
-    }, [selectedId, editingTextId])
+    }, [selectedId, editingTextId, undo, redo])
 
     /* ─── Render ─────────────────────────────────────────────── */
     if (loading) {
@@ -822,6 +892,21 @@ export default function FlyerEditorPage() {
 
     const toolbarActionButtons = (
         <>
+            {/* Undo / Redo */}
+            <button
+                onClick={undo}
+                disabled={historyIndex <= 0}
+                className={`flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-lg text-xs font-medium hover:bg-muted/80 disabled:opacity-50 ${isCompactLayout ? 'min-w-20 justify-center' : ''}`}
+            >
+                Undo
+            </button>
+            <button
+                onClick={redo}
+                disabled={historyIndex < 0 || historyIndex >= (historyRef.current.length - 1)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-lg text-xs font-medium hover:bg-muted/80 disabled:opacity-50 ${isCompactLayout ? 'min-w-20 justify-center' : ''}`}
+            >
+                Redo
+            </button>
             {/* Aspect ratio */}
             <Select value={aspectRatio} onValueChange={v => setAspectRatio(v as AspectRatio)}>
                 <SelectTrigger className="text-xs h-8 w-40">
