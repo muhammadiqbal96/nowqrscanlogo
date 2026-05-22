@@ -319,7 +319,7 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                 width,
                 height,
                 style: {
-                    background: '#ffffff',
+                    background: format === 'png' ? 'transparent' : '#ffffff',
                     margin: '0',
                     width: `${width}px`,
                     height: `${height}px`,

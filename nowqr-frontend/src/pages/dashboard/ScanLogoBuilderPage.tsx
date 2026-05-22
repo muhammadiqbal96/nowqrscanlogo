@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
     ArrowLeft, ArrowRight, Loader2, Shield, Circle, Settings, Eye,
-    Diamond, Hexagon, Square, Upload, X, Disc3, Monitor
+    Diamond, Hexagon, Square, Upload, X, Disc3, Monitor,
+    ShoppingBag, Phone, Heart, Calendar, PlayCircle, UtensilsCrossed, Zap
 } from 'lucide-react'
 import { scanLogoApi } from '@/lib/api'
 import ScanLogoPreview from '@/components/ScanLogoPreview'
@@ -41,6 +42,17 @@ const ANIMATION_OPTIONS = [
 const QR_COLOR_PRESETS = ['#111111', '#1f2937', '#0f766e', '#1d4ed8', '#9f1239', '#7c2d12', '#166534', '#ffffff']
 const WRAPPER_COLOR_PRESETS = ['#0ea5e9', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#0f172a', '#ffffff']
 
+const ACTION_PRESETS = [
+    { value: 'buy', label: 'Buy Now', desc: 'Products and offers', cta: 'BUY NOW', shape: 'square', animation: 'orbit', qrColor: '#111111', wrapperColor: '#2563eb', placeholder: 'https://your-store.com/products', icon: ShoppingBag },
+    { value: 'give', label: 'Give Now', desc: 'Donations and causes', cta: 'GIVE NOW', shape: 'circle', animation: 'pulse', qrColor: '#111111', wrapperColor: '#db2777', placeholder: 'https://your-nonprofit.org/donate', icon: Heart },
+    { value: 'pay', label: 'Pay Now', desc: 'Payments and invoices', cta: 'PAY NOW', shape: 'hexagon', animation: 'glow', qrColor: '#111111', wrapperColor: '#16a34a', placeholder: 'https://your-payment-link.com', icon: Zap },
+    { value: 'call', label: 'Call Now', desc: 'Phone-first actions', cta: 'CALL NOW', shape: 'circle', animation: 'flash', qrColor: '#111111', wrapperColor: '#ea580c', placeholder: 'tel:+15551234567', icon: Phone },
+    { value: 'book', label: 'Book Now', desc: 'Appointments and events', cta: 'BOOK NOW', shape: 'diamond', animation: 'expand', qrColor: '#111111', wrapperColor: '#7c3aed', placeholder: 'https://calendly.com/your-business', icon: Calendar },
+    { value: 'watch', label: 'Watch Now', desc: 'Video and media', cta: 'WATCH NOW', shape: 'tv', animation: 'bounce', qrColor: '#111111', wrapperColor: '#dc2626', placeholder: 'https://youtube.com/watch?v=...', icon: PlayCircle },
+    { value: 'order', label: 'Order Now', desc: 'Food and delivery', cta: 'ORDER NOW', shape: 'drum', animation: 'orbit', qrColor: '#111111', wrapperColor: '#f59e0b', placeholder: 'https://your-menu.com/order', icon: UtensilsCrossed },
+    { value: 'custom', label: 'Custom', desc: 'Any destination', cta: 'TAP TO SCAN', shape: 'shield', animation: 'orbit', qrColor: '#111111', wrapperColor: '#0ea5e9', placeholder: 'https://your-site.com/action', icon: Zap },
+]
+
 export default function ScanLogoBuilderPage() {
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
@@ -48,6 +60,7 @@ export default function ScanLogoBuilderPage() {
     const campaignId = searchParams.get('campaign_id')
 
     const [loading, setLoading] = useState(false)
+    const [selectedAction, setSelectedAction] = useState('custom')
     const [destinationUrl, setDestinationUrl] = useState('')
     const [shape, setShape] = useState('shield')
     const [animation, setAnimation] = useState('orbit')
@@ -74,6 +87,17 @@ export default function ScanLogoBuilderPage() {
     const removeLogo = () => {
         setLogoFile(null)
         setLogoPreviewUrl(null)
+    }
+
+    const selectedActionPreset = ACTION_PRESETS.find((preset) => preset.value === selectedAction) || ACTION_PRESETS[ACTION_PRESETS.length - 1]
+
+    const handleActionPreset = (preset: typeof ACTION_PRESETS[number]) => {
+        setSelectedAction(preset.value)
+        setCtaText(preset.cta)
+        setShape(SHAPE_ICONS[preset.shape] ? preset.shape : 'shield')
+        setAnimation(preset.animation)
+        setQrColor(preset.qrColor)
+        setWrapperColor(preset.wrapperColor)
     }
 
     const handleCreate = async () => {
@@ -123,18 +147,46 @@ export default function ScanLogoBuilderPage() {
             <div className="grid lg:grid-cols-5 gap-8">
                 {/* Controls */}
                 <div className="lg:col-span-3 space-y-6">
+                    {/* Action Preset */}
+                    <div className="bg-card border border-border rounded-2xl p-5">
+                        <label className="block text-sm font-semibold mb-1.5">Action ScanLogo</label>
+                        <p className="text-xs text-muted-foreground mb-3">Choose the action before adding the destination URL.</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            {ACTION_PRESETS.map((preset) => {
+                                const Icon = preset.icon
+                                const active = selectedAction === preset.value
+                                return (
+                                    <button
+                                        key={preset.value}
+                                        type="button"
+                                        onClick={() => handleActionPreset(preset)}
+                                        className={`text-left p-3 rounded-xl border-2 transition-all ${active ? 'border-primary bg-primary/5' : 'border-transparent bg-muted/50 hover:border-primary/30'}`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${preset.wrapperColor}18`, color: preset.wrapperColor }}>
+                                                <Icon className="w-4 h-4" />
+                                            </span>
+                                            <span className="text-xs font-semibold">{preset.label}</span>
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground leading-snug">{preset.desc}</p>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+
                     {/* Destination URL */}
                     <div className="bg-card border border-border rounded-2xl p-5">
-                        <label className="block text-sm font-semibold mb-1.5">Destination URL *</label>
-                        <p className="text-xs text-muted-foreground mb-3">Where should people land?</p>
+                        <label className="block text-sm font-semibold mb-1.5">Destination URL for this action *</label>
+                        <p className="text-xs text-muted-foreground mb-3">Where should {selectedActionPreset.label.toLowerCase()} send people?</p>
                         <input
                             type="url"
-                            placeholder="https://your-store.com/products"
+                            placeholder={selectedActionPreset.placeholder}
                             value={destinationUrl}
                             onChange={(e) => setDestinationUrl(e.target.value)}
                             className="w-full px-4 py-3 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
                         />
-                        <p className="text-[11px] text-muted-foreground mt-2">Dynamic — change anytime without reprinting.</p>
+                        <p className="text-[11px] text-muted-foreground mt-2">The QR and tap target use this tracked destination after creation.</p>
                     </div>
 
                     {/* Business Logo */}
