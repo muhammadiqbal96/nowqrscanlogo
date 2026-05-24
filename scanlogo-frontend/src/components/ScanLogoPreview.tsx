@@ -153,10 +153,17 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
     const normalizedAnimation = normalizeAnimation(animation)
     const compactMode = size < 96
 
+    // Scale down the base size so that the total outer width fits within `size`.
+    // Total width is shapeSize + 2 * shellPadding.
+    // In normal mode: shellPadding = Math.round(shapeSize * 0.12), so total width is shapeSize * 1.24.
+    // In compact mode: shellPadding = 0, so total width is shapeSize.
+    const scaleFactor = getShapeFrameScale(normalizedShape) * (compactMode ? 1.0 : 1.24)
+    const adjustedSize = Math.max(20, Math.round(size / scaleFactor))
+
     // Keep QR module stable while wrapper visuals animate around it.
-    const shapeSize = Math.round(size * getShapeFrameScale(normalizedShape))
+    const shapeSize = Math.round(adjustedSize * getShapeFrameScale(normalizedShape))
     const shellPadding = compactMode ? 0 : Math.max(10, Math.round(shapeSize * 0.12))
-    const qrSize = Math.floor(size * getQrScaleForShape(normalizedShape))
+    const qrSize = Math.floor(adjustedSize * getQrScaleForShape(normalizedShape))
     const qrCardSize = Math.max(42, Math.round(shapeSize * (compactMode ? 0.64 : 0.56)))
     const qrRenderSize = Math.max(30, Math.min(qrSize, Math.round(qrCardSize * 0.84)))
     const scanLogoVisuals = getScanLogoVisuals(color, wrapperColor)

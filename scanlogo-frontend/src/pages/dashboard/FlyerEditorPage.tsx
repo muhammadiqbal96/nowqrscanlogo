@@ -7,7 +7,7 @@ import {
     AlignLeft, AlignCenter, AlignRight, MousePointer, Lock, Unlock,
     X,
     RotateCcw, RotateCw, FlipHorizontal, FlipVertical,
-    Camera, PenTool, Grid3X3,
+    Camera, PenTool, Grid3X3, Eye, ExternalLink,
 } from 'lucide-react'
 import { toPng, toJpeg } from 'html-to-image'
 import { campaignApi, scanLogoApi, aiApi } from '@/lib/api'
@@ -160,6 +160,8 @@ export default function FlyerEditorPage() {
 
     // Track which ScanLogo to use per QR element
     const [qrScanLogoMap, setQrScanLogoMap] = useState<Record<string, number>>({})
+    const [enlargedLogo, setEnlargedLogo] = useState<any>(null)
+
     const getQrScanLogo = (elId: string) => {
         const logoId = qrScanLogoMap[elId]
         if (logoId !== undefined) return scanLogos.find(sl => sl.id === logoId) || scanLogos[0]
@@ -862,6 +864,10 @@ export default function FlyerEditorPage() {
         e.stopPropagation()
         if (el.type === 'text') {
             setEditingTextId(el.id)
+        } else if (el.type === 'qr') {
+            const logo = getQrScanLogo(el.id)
+            const url = logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://scanlogos.com'
+            window.open(url, '_blank')
         }
     }
 
@@ -1293,16 +1299,25 @@ export default function FlyerEditorPage() {
                     <div className="space-y-2">
                         <p className="text-[10px] font-semibold text-muted-foreground uppercase">ScanLogo</p>
                         {scanLogos.length > 0 ? (
-                            <Select value={String(qrScanLogoMap[selected.id] ?? scanLogos[0]?.id ?? '')} onValueChange={v => setQrScanLogoMap(prev => ({ ...prev, [selected.id]: +v }))}>
-                                <SelectTrigger className="text-xs h-8"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {scanLogos.map(sl => (
-                                        <SelectItem key={sl.id} value={String(sl.id)}>
-                                            {sl.cta_text || `ScanLogo #${sl.id}`} — {sl.shape}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <>
+                                <Select value={String(qrScanLogoMap[selected.id] ?? scanLogos[0]?.id ?? '')} onValueChange={v => setQrScanLogoMap(prev => ({ ...prev, [selected.id]: +v }))}>
+                                    <SelectTrigger className="text-xs h-8"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {scanLogos.map(sl => (
+                                            <SelectItem key={sl.id} value={String(sl.id)}>
+                                                {sl.cta_text || `ScanLogo #${sl.id}`} — {sl.shape}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <button
+                                    type="button"
+                                    onClick={() => setEnlargedLogo(getQrScanLogo(selected.id))}
+                                    className="w-full mt-2 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg text-xs font-semibold transition-colors"
+                                >
+                                    <Eye className="w-3.5 h-3.5" /> Enlarge ScanLogo
+                                </button>
+                            </>
                         ) : (
                             <p className="text-xs text-muted-foreground">No ScanLogos found. Create one first.</p>
                         )}
@@ -1373,9 +1388,9 @@ export default function FlyerEditorPage() {
             {el.type === 'qr' && (() => {
                 const logo = getQrScanLogo(el.id)
                 return (
-                    <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-full h-full flex items-center justify-center relative group/qr">
                         <ScanLogoPreview
-                            url={logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://nowqr.com'}
+                            url={logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://scanlogos.com'}
                             shortUrl={logo?.short_url}
                             shape={logo?.shape || 'shield'}
                             animation={logo?.animation || 'none'}
@@ -1384,9 +1399,41 @@ export default function FlyerEditorPage() {
                             ctaText={logo?.cta_text || campaign?.cta_button_text || 'SCAN ME'}
                             safeScanBadge={false}
                             centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
-                            size={Math.min(el.width, el.height) - 20}
+                            size={Math.min(el.width, el.height)}
                             minimal
                         />
+                        {/* Enlarge and View Link actions overlay */}
+                        <div 
+                            className="absolute inset-0 bg-black/40 opacity-0 group-hover/qr:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-2xl z-10 pointer-events-none"
+                        >
+                            <button
+                                type="button"
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEnlargedLogo(logo);
+                                }}
+                                className="p-2 rounded-full bg-white text-black hover:bg-slate-100 transition-colors shadow-lg pointer-events-auto"
+                                title="Enlarge ScanLogo"
+                            >
+                                <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                                type="button"
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const url = logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://scanlogos.com';
+                                    window.open(url, '_blank');
+                                }}
+                                className="p-2 rounded-full bg-white text-black hover:bg-slate-100 transition-colors shadow-lg pointer-events-auto"
+                                title="Visit Link"
+                            >
+                                <ExternalLink className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
                 )
             })()}
@@ -1677,6 +1724,69 @@ export default function FlyerEditorPage() {
                     </div>
 
                 </div>
+                {/* ─── Enlarged QR Code Modal ─── */}
+                {enlargedLogo && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEnlargedLogo(null)} />
+                        <div className="relative bg-card border border-border rounded-3xl p-8 max-w-sm w-full mx-4 shadow-2xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
+                            {/* Close button */}
+                            <button 
+                                onClick={() => setEnlargedLogo(null)}
+                                className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                                aria-label="Close"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+
+                            <h3 className="font-bold text-base mb-1 text-foreground text-center">
+                                {enlargedLogo.name || `ScanLogo #${enlargedLogo.id}`}
+                            </h3>
+                            
+                            <p className="text-xs text-muted-foreground mb-6 text-center max-w-[240px]">
+                                Double click the QR code to navigate directly, or click the button below.
+                            </p>
+
+                            {/* Enlarged QR Code Container */}
+                            <div 
+                                className="bg-white p-5 rounded-[2rem] shadow-inner mb-6 border border-slate-100 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform duration-200 select-none"
+                                onDoubleClick={() => {
+                                    const url = enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com';
+                                    window.open(url, '_blank');
+                                }}
+                                title="Double click to visit link"
+                            >
+                                <ScanLogoPreview
+                                    url={enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                                    shortUrl={enlargedLogo.short_url}
+                                    shape={enlargedLogo.shape || 'shield'}
+                                    animation={enlargedLogo.animation || 'none'}
+                                    color={enlargedLogo.color || campaign?.primary_color || '#c8401a'}
+                                    wrapperColor={enlargedLogo.wrapper_color || enlargedLogo.color || campaign?.primary_color || '#c8401a'}
+                                    ctaText={enlargedLogo.cta_text || campaign?.cta_button_text || 'SCAN'}
+                                    safeScanBadge={false}
+                                    centerLogoUrl={enlargedLogo.center_logo_path ? `/storage/${enlargedLogo.center_logo_path}` : null}
+                                    size={220}
+                                    minimal
+                                />
+                            </div>
+
+                            {/* Visit link button */}
+                            <a
+                                href={enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl bg-primary text-primary-foreground font-bold py-2.5 text-xs hover:opacity-90 shadow-lg shadow-primary/20 transition-all"
+                            >
+                                Visit Link
+                                <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                            
+                            <span className="text-[10px] text-muted-foreground mt-3 break-all max-w-full truncate px-4">
+                                {enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                            </span>
+                        </div>
+                    </div>
+                )}
             </div>
         )
     }
@@ -1775,6 +1885,69 @@ export default function FlyerEditorPage() {
                     )
                 })}
             </div>
+            {/* ─── Enlarged QR Code Modal ─── */}
+            {enlargedLogo && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEnlargedLogo(null)} />
+                    <div className="relative bg-card border border-border rounded-3xl p-8 max-w-sm w-full mx-4 shadow-2xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
+                        {/* Close button */}
+                        <button 
+                            onClick={() => setEnlargedLogo(null)}
+                            className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                            aria-label="Close"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+
+                        <h3 className="font-bold text-base mb-1 text-foreground text-center">
+                            {enlargedLogo.name || `ScanLogo #${enlargedLogo.id}`}
+                        </h3>
+                        
+                        <p className="text-xs text-muted-foreground mb-6 text-center max-w-[240px]">
+                            Double click the QR code to navigate directly, or click the button below.
+                        </p>
+
+                        {/* Enlarged QR Code Container */}
+                        <div 
+                            className="bg-white p-5 rounded-[2rem] shadow-inner mb-6 border border-slate-100 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform duration-200 select-none"
+                            onDoubleClick={() => {
+                                const url = enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com';
+                                window.open(url, '_blank');
+                            }}
+                            title="Double click to visit link"
+                        >
+                            <ScanLogoPreview
+                                url={enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                                shortUrl={enlargedLogo.short_url}
+                                shape={enlargedLogo.shape || 'shield'}
+                                animation={enlargedLogo.animation || 'none'}
+                                color={enlargedLogo.color || campaign?.primary_color || '#c8401a'}
+                                wrapperColor={enlargedLogo.wrapper_color || enlargedLogo.color || campaign?.primary_color || '#c8401a'}
+                                ctaText={enlargedLogo.cta_text || campaign?.cta_button_text || 'SCAN'}
+                                safeScanBadge={false}
+                                centerLogoUrl={enlargedLogo.center_logo_path ? `/storage/${enlargedLogo.center_logo_path}` : null}
+                                size={220}
+                                minimal
+                            />
+                        </div>
+
+                        {/* Visit link button */}
+                        <a
+                            href={enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl bg-primary text-primary-foreground font-bold py-2.5 text-xs hover:opacity-90 shadow-lg shadow-primary/20 transition-all"
+                        >
+                            Visit Link
+                            <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                        
+                        <span className="text-[10px] text-muted-foreground mt-3 break-all max-w-full truncate px-4">
+                            {enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                        </span>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
