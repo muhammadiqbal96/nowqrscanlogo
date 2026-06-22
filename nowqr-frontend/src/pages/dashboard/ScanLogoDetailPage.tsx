@@ -9,6 +9,27 @@ import ScanLogoPreview, { type ScanLogoPreviewRef } from '@/components/ScanLogoP
 import { useAuth } from '@/context/AuthContext'
 import toast from 'react-hot-toast'
 
+type Frame = 'arch' | 'circle' | 'ticket' | 'diamond' | 'pin' | 'vertical' | 'wide' | 'phone' | 'triangle' | 'brackets'
+
+const FRAME_OPTIONS: { value: Frame; label: string; desc: string }[] = [
+    { value: 'arch', label: 'Arch Badge', desc: 'Headline on top, QR below ($34 style)' },
+    { value: 'circle', label: 'Circle + Ribbon', desc: 'Round badge with a ribbon banner' },
+    { value: 'ticket', label: 'Ticket + Button', desc: 'QR card with a connected action button' },
+    { value: 'diamond', label: 'Diamond', desc: 'Diamond badge with a tag below' },
+    { value: 'pin', label: 'Location Pin', desc: 'Map-pin teardrop with QR disc' },
+    { value: 'vertical', label: 'Vertical Card', desc: 'Header + QR + footer card' },
+    { value: 'wide', label: 'Wide Banner', desc: 'Text left, QR on the right' },
+    { value: 'phone', label: 'Phone Mockup', desc: 'QR on a phone screen' },
+    { value: 'triangle', label: 'Play Triangle', desc: 'Play-button badge with QR' },
+    { value: 'brackets', label: 'Bracket Frame', desc: 'Camera-style corner brackets' },
+]
+
+const FRAME_VALUES: Frame[] = ['arch', 'circle', 'ticket', 'diamond', 'pin', 'vertical', 'wide', 'phone', 'triangle', 'brackets']
+const resolveFrame = (banner?: string): Frame =>
+    (FRAME_VALUES.includes((banner || '').toLowerCase() as Frame) ? ((banner || '').toLowerCase() as Frame) : 'arch')
+
+const WRAPPER_COLOR_PRESETS = ['#2563eb', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#db2777', '#0f172a']
+
 export default function ScanLogoDetailPage() {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -25,6 +46,13 @@ export default function ScanLogoDetailPage() {
     // Logo upload for center
     const [uploadingLogo, setUploadingLogo] = useState(false)
 
+    // Design (live-bound to the preview, persisted with Save)
+    const [frame, setFrame] = useState<Frame>('arch')
+    const [headline, setHeadline] = useState('')
+    const [subtitle, setSubtitle] = useState('')
+    const [wrapperColor, setWrapperColor] = useState('#2563eb')
+    const [savingDesign, setSavingDesign] = useState(false)
+
     useEffect(() => {
         loadData()
     }, [id])
@@ -35,14 +63,37 @@ export default function ScanLogoDetailPage() {
                 scanLogoApi.get(Number(id)),
                 analyticsApi.scanLogo(Number(id)).catch(() => ({ data: null })),
             ])
-            setScanLogo(logoRes.data.scan_logo || logoRes.data)
-            setDestinationUrl(logoRes.data.scan_logo?.destination_url || logoRes.data.destination_url || '')
+            const logo = logoRes.data.scan_logo || logoRes.data
+            setScanLogo(logo)
+            setDestinationUrl(logo.destination_url || '')
+            setFrame(resolveFrame(logo.banner))
+            setHeadline(logo.cta_text || 'SCAN ME')
+            setSubtitle(logo.subtitle || '')
+            setWrapperColor(logo.wrapper_color || logo.color || '#2563eb')
             if (analyticsRes.data) setAnalytics(analyticsRes.data)
         } catch {
             toast.error('Failed to load ScanLogo')
             navigate('/dashboard/scanlogos')
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleSaveDesign = async () => {
+        setSavingDesign(true)
+        try {
+            await scanLogoApi.update(Number(id), {
+                banner: frame,
+                cta_text: headline.trim() || 'SCAN ME',
+                subtitle: subtitle.trim(),
+                wrapper_color: wrapperColor,
+            })
+            toast.success('Design saved!')
+            await loadData()
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || 'Failed to save design')
+        } finally {
+            setSavingDesign(false)
         }
     }
 
@@ -111,6 +162,11 @@ export default function ScanLogoDetailPage() {
 
     if (!scanLogo) return null
 
+    const designDirty = frame !== resolveFrame(scanLogo.banner)
+        || headline.trim() !== (scanLogo.cta_text || 'SCAN ME').trim()
+        || subtitle.trim() !== (scanLogo.subtitle || '').trim()
+        || wrapperColor !== (scanLogo.wrapper_color || scanLogo.color || '#2563eb')
+
     return (
         <div className="max-w-4xl mx-auto">
             <button onClick={() => navigate('/dashboard/scanlogos')} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
@@ -170,12 +226,8 @@ export default function ScanLogoDetailPage() {
                             {/* Properties */}
                             <div className="grid grid-cols-2 gap-4 pt-2">
                                 <div>
-                                    <p className="text-xs text-muted-foreground">Shape</p>
-                                    <p className="text-sm font-medium capitalize">{scanLogo.shape}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-muted-foreground">Animation</p>
-                                    <p className="text-sm font-medium capitalize">{scanLogo.animation}</p>
+                                    <p className="text-xs text-muted-foreground">Frame</p>
+                                    <p className="text-sm font-medium capitalize">{resolveFrame(scanLogo.banner)}</p>
                                 </div>
                                 <div>
                                     <p className="text-xs text-muted-foreground">Status</p>
@@ -189,6 +241,86 @@ export default function ScanLogoDetailPage() {
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Design / Action ScanLogo */}
+                    <div className="bg-card border border-border rounded-2xl p-6">
+                        <label className="block text-sm font-semibold mb-1.5">Action ScanLogo Design</label>
+                        <p className="text-xs text-muted-foreground mb-4">Change the frame, text box and brand color. The preview updates live — hit Save to keep it.</p>
+
+                        {/* Frame */}
+                        <p className="text-xs font-medium mb-2">Frame Style</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+                            {FRAME_OPTIONS.map((opt) => {
+                                const active = frame === opt.value
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => setFrame(opt.value)}
+                                        className={`text-left p-3 rounded-xl border-2 transition-all ${active ? 'border-primary bg-primary/5' : 'border-transparent bg-muted/50 hover:border-primary/30'}`}
+                                    >
+                                        <span className="text-xs font-semibold block mb-0.5">{opt.label}</span>
+                                        <p className="text-[10px] text-muted-foreground leading-snug">{opt.desc}</p>
+                                    </button>
+                                )
+                            })}
+                        </div>
+
+                        {/* Headline + Subtitle */}
+                        <div className="grid sm:grid-cols-2 gap-3 mb-4">
+                            <div>
+                                <p className="text-xs font-medium mb-1.5">Headline</p>
+                                <input
+                                    type="text"
+                                    placeholder="SCAN & WIN  or  $34"
+                                    value={headline}
+                                    maxLength={50}
+                                    onChange={(e) => setHeadline(e.target.value)}
+                                    className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium mb-1.5">Sub-line (optional)</p>
+                                <input
+                                    type="text"
+                                    placeholder="Win big today  or  MENSUAL"
+                                    value={subtitle}
+                                    maxLength={60}
+                                    onChange={(e) => setSubtitle(e.target.value)}
+                                    className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Wrapper color */}
+                        <p className="text-xs font-medium mb-2">Wrapper Brand Color</p>
+                        <div className="flex items-center gap-2 flex-wrap mb-4">
+                            {WRAPPER_COLOR_PRESETS.map((c) => (
+                                <button
+                                    key={`wrapper-${c}`}
+                                    onClick={() => setWrapperColor(c)}
+                                    className={`w-8 h-8 rounded-lg transition-all border ${wrapperColor === c ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'hover:scale-105'} border-transparent`}
+                                    style={{ backgroundColor: c }}
+                                />
+                            ))}
+                            <input
+                                type="color"
+                                value={wrapperColor}
+                                onChange={(e) => setWrapperColor(e.target.value)}
+                                className="w-8 h-8 rounded-lg cursor-pointer border border-border"
+                                title="Pick wrapper brand color"
+                            />
+                        </div>
+
+                        <button
+                            onClick={handleSaveDesign}
+                            disabled={savingDesign || !designDirty}
+                            className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 text-sm disabled:opacity-50"
+                        >
+                            {savingDesign ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            {designDirty ? 'Save design' : 'Saved'}
+                        </button>
                     </div>
 
                     {/* Quick Analytics */}
@@ -219,19 +351,21 @@ export default function ScanLogoDetailPage() {
                 <div className="space-y-6">
                     <div className="bg-card border border-border rounded-2xl p-6">
                         <p className="text-xs text-muted-foreground mb-4 text-center">Preview</p>
-                        <ScanLogoPreview
-                            ref={qrPreviewRef}
-                            url={scanLogo.destination_url}
-                            shape={scanLogo.shape}
-                            animation={scanLogo.animation}
-                            color={scanLogo.color}
-                            wrapperColor={scanLogo.wrapper_color || scanLogo.color}
-                            ctaText={scanLogo.cta_text}
-                            safeScanBadge={scanLogo.safe_scan_badge}
-                            centerLogoUrl={scanLogo.center_logo_path ? `/storage/${scanLogo.center_logo_path}` : null}
-                            shortUrl={scanLogo.short_url}
-                            size={180}
-                        />
+                        <div className="flex items-center justify-center min-h-[320px]">
+                            <ScanLogoPreview
+                                ref={qrPreviewRef}
+                                url={scanLogo.destination_url}
+                                color={scanLogo.color}
+                                wrapperColor={wrapperColor}
+                                ctaText={headline}
+                                subtitle={subtitle}
+                                safeScanBadge={scanLogo.safe_scan_badge}
+                                centerLogoUrl={scanLogo.center_logo_path ? `/storage/${scanLogo.center_logo_path}` : null}
+                                shortUrl={scanLogo.short_url}
+                                size={180}
+                                bannerTemplate={frame}
+                            />
+                        </div>
 
                         {/* Change logo */}
                         <div className="mt-5 text-center">

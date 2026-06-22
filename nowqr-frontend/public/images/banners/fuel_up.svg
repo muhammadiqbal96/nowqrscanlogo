@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 340" width="240" height="340">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="gymFloor" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f19"/>
+      <stop offset="100%" stop-color="#020408"/>
+    </linearGradient>
+
+    <!-- Neon Green Glow -->
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <!-- Metallic steel gradient -->
+    <linearGradient id="steel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f3f4f6"/>
+      <stop offset="50%" stop-color="#9ca3af"/>
+      <stop offset="100%" stop-color="#374151"/>
+    </linearGradient>
+
+    <!-- Bumper Plate Green Gradient -->
+    <linearGradient id="bumperGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4ade80"/>
+      <stop offset="100%" stop-color="#15803d"/>
+    </linearGradient>
+    
+    <filter id="heavyShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="15" flood-color="#000000" flood-opacity="0.75"/>
+    </filter>
+  </defs>
+
+  <!-- Gym Background -->
+  <rect width="240" height="340" rx="24" fill="url(#gymFloor)"/>
+
+  <!-- Gym floor grid/speckle pattern -->
+  <path d="M 0,80 L 240,80 M 0,260 L 240,260" stroke="#1e293b" stroke-width="1.5" opacity="0.3"/>
+  <circle cx="40" cy="90" r="1.5" fill="#38bdf8" opacity="0.15"/>
+  <circle cx="200" cy="250" r="1.5" fill="#38bdf8" opacity="0.15"/>
+
+  <!-- Neon Green Gym Background Light strip -->
+  <line x1="30" y1="0" x2="30" y2="340" stroke="#22c55e" stroke-width="3" opacity="0.15" filter="url(#neonGlow)"/>
+  <line x1="210" y1="0" x2="210" y2="340" stroke="#22c55e" stroke-width="3" opacity="0.15" filter="url(#neonGlow)"/>
+
+  <!-- Crossed Dumbbells behind the main plate -->
+  <g filter="url(#heavyShadow)">
+    <!-- Dumbbell 1 (Diagonal Left-To-Right) -->
+    <g transform="translate(120, 170) rotate(-45) translate(-120, -170)">
+      <rect x="50" y="166" width="140" height="8" fill="url(#steel)" rx="2"/>
+      <rect x="40" y="152" width="10" height="36" fill="#1f2937" rx="3"/>
+      <rect x="30" y="156" width="8" height="28" fill="#111827" rx="2"/>
+      <rect x="190" y="152" width="10" height="36" fill="#1f2937" rx="3"/>
+      <rect x="202" y="156" width="8" height="28" fill="#111827" rx="2"/>
+    </g>
+    <!-- Dumbbell 2 (Diagonal Right-To-Left) -->
+    <g transform="translate(120, 170) rotate(45) translate(-120, -170)">
+      <rect x="50" y="166" width="140" height="8" fill="url(#steel)" rx="2"/>
+      <rect x="40" y="152" width="10" height="36" fill="#1f2937" rx="3"/>
+      <rect x="30" y="156" width="8" height="28" fill="#111827" rx="2"/>
+      <rect x="190" y="152" width="10" height="36" fill="#1f2937" rx="3"/>
+      <rect x="202" y="156" width="8" height="28" fill="#111827" rx="2"/>
+    </g>
+  </g>
+
+  <!-- Horizontal Barbell Shaft crossing behind the plate -->
+  <rect x="10" y="164" width="220" height="12" fill="url(#steel)" rx="2" filter="url(#heavyShadow)"/>
+  <rect x="25" y="160" width="8" height="20" fill="#111827" rx="1"/>
+  <rect x="207" y="160" width="8" height="20" fill="#111827" rx="1"/>
+
+  <!-- Olympic Green Bumper Plate (Centered at 120, 170) -->
+  <circle cx="120" cy="170" r="92" fill="url(#bumperGreen)" filter="url(#heavyShadow)"/>
+  
+  <!-- Inner Ring Detents/Ribs -->
+  <circle cx="120" cy="170" r="82" fill="none" stroke="#166534" stroke-width="4"/>
+  <circle cx="120" cy="170" r="66" fill="none" stroke="#22c55e" stroke-width="2" opacity="0.5"/>
+
+  <!-- Weight Plate Text ("GYM" / "55 LBS" / "25 KG") -->
+  <text x="120" y="104" fill="#ffffff" font-size="9" font-weight="900" font-family="sans-serif" text-anchor="middle" letter-spacing="0.15em" opacity="0.85">ATHLETIC</text>
+  <text x="120" y="246" fill="#ffffff" font-size="9" font-weight="900" font-family="sans-serif" text-anchor="middle" letter-spacing="0.15em" opacity="0.85">55 LBS</text>
+
+  <!-- Steel Inner Core sleeve framing the QR Code -->
+  <circle cx="120" cy="170" r="54" fill="none" stroke="url(#steel)" stroke-width="6" filter="url(#heavyShadow)"/>
+  <circle cx="120" cy="170" r="51" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.6"/>
+</svg>

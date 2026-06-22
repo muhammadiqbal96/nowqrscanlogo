@@ -333,35 +333,35 @@ export default function FlyerEditorPage() {
 
         // Business name
         els.push({
-            id: uid(), type: 'text', x: 80, y: 160, width: 500, height: 50,
+            id: uid(), type: 'text', x: 80, y: 160, width: 500, height: 60,
             rotation: 0, locked: false,
             content: camp.business_name || 'Your Business',
-            fontSize: 24, fontFamily: font, fontWeight: '700',
+            fontSize: 32, fontFamily: font, fontWeight: '700',
             textColor: color, textAlign: 'left', fontStyle: 'normal',
         })
 
         // Headline
         els.push({
-            id: uid(), type: 'text', x: 80, y: 320, width: 920, height: 220,
+            id: uid(), type: 'text', x: 80, y: 320, width: 920, height: 240,
             rotation: 0, locked: false,
             content: camp.headline || 'Your Headline Here',
-            fontSize: 76, fontFamily: font, fontWeight: '800',
+            fontSize: 88, fontFamily: font, fontWeight: '800',
             textColor: '#111111', textAlign: 'left', fontStyle: 'normal',
         })
 
         // Divider line
         els.push({
-            id: uid(), type: 'shape', x: 80, y: 570, width: 80, height: 4,
+            id: uid(), type: 'shape', x: 80, y: 580, width: 80, height: 4,
             rotation: 0, locked: true, bgColor: color, borderRadius: 2, opacity: 1,
         })
 
         // Sub-headline
         if (camp.sub_headline) {
             els.push({
-                id: uid(), type: 'text', x: 80, y: 610, width: 800, height: 80,
+                id: uid(), type: 'text', x: 80, y: 620, width: 800, height: 90,
                 rotation: 0, locked: false,
                 content: camp.sub_headline,
-                fontSize: 30, fontFamily: font, fontWeight: '500',
+                fontSize: 36, fontFamily: font, fontWeight: '500',
                 textColor: '#111111', textAlign: 'left', fontStyle: 'normal',
             })
         }
@@ -369,10 +369,10 @@ export default function FlyerEditorPage() {
         // Description
         if (camp.description) {
             els.push({
-                id: uid(), type: 'text', x: 80, y: 730, width: 800, height: 180,
+                id: uid(), type: 'text', x: 80, y: 740, width: 800, height: 190,
                 rotation: 0, locked: false,
                 content: camp.description,
-                fontSize: 24, fontFamily: font, fontWeight: '400',
+                fontSize: 28, fontFamily: font, fontWeight: '400',
                 textColor: '#374151', textAlign: 'left', fontStyle: 'normal',
             })
         }
@@ -393,7 +393,7 @@ export default function FlyerEditorPage() {
                 id: uid(), type: 'text', x: 80, y: 1500, width: 340, height: 70,
                 rotation: 0, locked: false,
                 content: camp.cta_button_text,
-                fontSize: 24, fontFamily: font, fontWeight: '700',
+                fontSize: 28, fontFamily: font, fontWeight: '700',
                 textColor: '#ffffff', textAlign: 'center', fontStyle: 'normal',
             })
         }
@@ -409,7 +409,7 @@ export default function FlyerEditorPage() {
             id: uid(), type: 'text', x: 340, y: 1840, width: 400, height: 40,
             rotation: 0, locked: false,
             content: 'Powered by NowQR',
-            fontSize: 16, fontFamily: font, fontWeight: '400',
+            fontSize: 20, fontFamily: font, fontWeight: '400',
             textColor: 'rgba(17,17,17,0.7)', textAlign: 'center', fontStyle: 'normal',
         })
 

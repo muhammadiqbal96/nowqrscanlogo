@@ -14,12 +14,15 @@ export interface ScanLogoPreviewProps {
     color?: string
     wrapperColor?: string
     ctaText?: string
+    /** Secondary "where the action goes" line shown under the headline (Action ScanLogo frames) */
+    subtitle?: string
     safeScanBadge?: boolean
     centerLogoUrl?: string | null
     shortUrl?: string
     size?: number
     /** When true, hides CTA text, short URL and safe-scan badge (for flyer embed) */
     minimal?: boolean
+    bannerTemplate?: string
 }
 
 export interface ScanLogoPreviewRef {
@@ -106,8 +109,9 @@ function getOrbitTextLayout(
     let bestText = orbitUnit.repeat(4)
     let bestFontSize = 8
     let bestDiff = Number.POSITIVE_INFINITY
+    let bestRepeatCount = 4
 
-    for (let repeatCount = 2; repeatCount <= 8; repeatCount++) {
+    for (let repeatCount = 1; repeatCount <= 12; repeatCount++) {
         const chars = orbitUnit.length * repeatCount
         if (!chars) continue
 
@@ -118,21 +122,48 @@ function getOrbitTextLayout(
 
         if (diff < bestDiff) {
             bestDiff = diff
-            bestText = orbitUnit.repeat(repeatCount)
+            bestRepeatCount = repeatCount
             bestFontSize = clampedFontSize
         }
     }
 
-    // Guarantee enough characters to cover the full ring even on mobile/font fallback differences.
-    const unitWidthAtBest = orbitUnit.length * bestFontSize * (avgGlyphAdvanceEm + trackingEm)
-    const minRepeatCount = Math.max(8, Math.ceil(circumference / Math.max(unitWidthAtBest, 1)) + 2)
-    bestText = orbitUnit.repeat(minRepeatCount)
+    // Use the calculated best repeat count to fit the circle perfectly without overlapping layers.
+    bestText = orbitUnit.repeat(bestRepeatCount)
 
     return {
         text: bestText,
         fontSizePx: Number(bestFontSize.toFixed(2)),
         circumference,
     }
+}
+
+const getWrapperShellRadius = (shape: string): string => {
+    const s = shape.toLowerCase()
+    if (s === 'circle' || s === 'drum') return '999px'
+    if (s === 'square' || s === 'tv') return '22px'
+    if (s === 'hexagon') return '28px'
+    if (s === 'shield' || s === 'diamond' || s === 'gear' || s === 'eye') return '32px'
+    return '999px'
+}
+
+
+
+const isLightColor = (hex?: string) => {
+    if (!hex) return false
+    const color = hex.replace('#', '')
+    if (color.length === 3) {
+        const r = parseInt(color[0] + color[0], 16)
+        const g = parseInt(color[1] + color[1], 16)
+        const b = parseInt(color[2] + color[2], 16)
+        return (r * 299 + g * 587 + b * 114) / 1000 > 180
+    }
+    if (color.length === 6) {
+        const r = parseInt(color.slice(0, 2), 16)
+        const g = parseInt(color.slice(2, 4), 16)
+        const b = parseInt(color.slice(4, 6), 16)
+        return (r * 299 + g * 587 + b * 114) / 1000 > 180
+    }
+    return false
 }
 
 const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(function ScanLogoPreview({
@@ -142,11 +173,13 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
     color = '#111111',
     wrapperColor,
     ctaText = 'TAP TO SCAN',
+    subtitle,
     safeScanBadge = true,
     centerLogoUrl,
     shortUrl,
     size = 200,
     minimal = false,
+    bannerTemplate = 'arch',
 }, ref) {
     const qrRef = useRef<any>(null)
     const normalizedShape = (shape || 'shield').toLowerCase()
@@ -155,17 +188,56 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
 
     // Scale down the base size so that the total outer width fits within `size`.
     // Total width is shapeSize + 2 * shellPadding.
-    // In normal mode: shellPadding = Math.round(shapeSize * 0.12), so total width is shapeSize * 1.24.
+    // In normal mode: shellPadding = 10, so total width is shapeSize * 1.12.
     // In compact mode: shellPadding = 0, so total width is shapeSize.
-    const scaleFactor = getShapeFrameScale(normalizedShape) * (compactMode ? 1.0 : 1.24)
+    const scaleFactor = getShapeFrameScale(normalizedShape) * (compactMode ? 1.0 : 1.12)
     const adjustedSize = Math.max(20, Math.round(size / scaleFactor))
 
     // Keep QR module stable while wrapper visuals animate around it.
     const shapeSize = Math.round(adjustedSize * getShapeFrameScale(normalizedShape))
-    const shellPadding = compactMode ? 0 : Math.max(10, Math.round(shapeSize * 0.12))
+    const shellPadding = compactMode ? 0 : 10
     const qrSize = Math.floor(adjustedSize * getQrScaleForShape(normalizedShape))
-    const qrCardSize = Math.max(42, Math.round(shapeSize * (compactMode ? 0.64 : 0.56)))
-    const qrRenderSize = Math.max(30, Math.min(qrSize, Math.round(qrCardSize * 0.84)))
+
+    const getQrCardMultiplier = (shapeName: string) => {
+        const s = shapeName.toLowerCase()
+        if (s === 'square') return 0.76
+        if (s === 'circle') return 0.64
+        if (s === 'hexagon') return 0.66
+        if (s === 'shield') return 0.64
+        if (s === 'diamond') return 0.58
+        if (s === 'gear') return 0.66
+        if (s === 'eye') return 0.64
+        if (s === 'drum') return 0.66
+        if (s === 'tv') return 0.68
+        return 0.66
+    }
+
+    const getEyeRadiusForShape = (shapeName: string): any => {
+        const s = shapeName.toLowerCase()
+        if (s === 'circle' || s === 'gear') {
+            return [
+                { outer: [12, 12, 12, 12], inner: [6, 6, 6, 6] },
+                { outer: [12, 12, 12, 12], inner: [6, 6, 6, 6] },
+                { outer: [12, 12, 12, 12], inner: [6, 6, 6, 6] },
+            ]
+        }
+        if (s === 'square' || s === 'tv') {
+            return [
+                { outer: [4, 4, 4, 4], inner: [2, 2, 2, 2] },
+                { outer: [4, 4, 4, 4], inner: [2, 2, 2, 2] },
+                { outer: [4, 4, 4, 4], inner: [2, 2, 2, 2] },
+            ]
+        }
+        // Shield, Diamond, Hexagon, Drum, Eye: rounded outer shield corner finders
+        return [
+            { outer: [12, 12, 0, 12], inner: [6, 6, 0, 6] },
+            { outer: [12, 12, 12, 0], inner: [6, 6, 6, 0] },
+            { outer: [12, 0, 12, 12], inner: [6, 0, 6, 6] },
+        ]
+    }
+
+    const qrCardSize = Math.max(42, Math.round(shapeSize * (compactMode ? 0.82 : getQrCardMultiplier(normalizedShape))))
+    const qrRenderSize = Math.max(30, Math.min(qrSize, Math.round(qrCardSize * 0.94)))
     const scanLogoVisuals = getScanLogoVisuals(color, wrapperColor)
     const resolvedCtaText = ctaText.trim() || 'TAP TO SCAN'
     const ctaOrbitText = resolvedCtaText.toUpperCase()
@@ -177,6 +249,7 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
     const orbitPathSeed = useId().replace(/[^a-zA-Z0-9_-]/g, '')
     const orbitPathPrimaryId = `scanlogo-orbit-primary-${orbitPathSeed}`
     const orbitPathSecondaryId = `scanlogo-orbit-secondary-${orbitPathSeed}`
+    const shapeGradientId = `scanlogo-shape-gradient-${orbitPathSeed}`
 
     // Prefer the shortest available URL so the QR matrix stays less dense and easier to scan.
     const qrValue = [shortUrl, url]
@@ -469,6 +542,521 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
         },
     }))
 
+    // ── Action ScanLogo: one branded family, three frames (arch / circle / ticket) ──
+    // The header text box holds a flexible headline — a price like "$34" or an action
+    // word like "SCAN & WIN" — plus an optional sub-line that describes where the action
+    // goes (e.g. "MENSUAL", "Win big today"). Everything renders on a transparent
+    // background so the branded graphic itself is the clickable QR, with no surrounding
+    // sheet. Flyer / campaign embeds (minimal) keep the plain QR untouched.
+    const FRAME_VALUES = ['arch', 'circle', 'ticket', 'diamond', 'pin', 'vertical', 'wide', 'phone', 'triangle', 'brackets']
+    const normalizedFrame = (bannerTemplate || '').toLowerCase()
+    const actionFrame = FRAME_VALUES.includes(normalizedFrame)
+        ? normalizedFrame
+        : (bannerTemplate && bannerTemplate !== 'none' ? 'arch' : '')
+
+    if (!minimal && actionFrame) {
+        const brandColor = (wrapperColor && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(wrapperColor.trim()))
+            ? wrapperColor.trim()
+            : '#0ea5e9'
+        const brandIsLight = isLightColor(brandColor)
+        const onBrand = brandIsLight ? '#0f172a' : '#ffffff'
+        const onBrandSoft = brandIsLight ? 'rgba(15,23,42,0.62)' : 'rgba(255,255,255,0.82)'
+        const dividerColor = brandIsLight ? 'rgba(15,23,42,0.4)' : 'rgba(255,255,255,0.72)'
+        const brandFill = `linear-gradient(165deg, rgba(255,255,255,0.26), rgba(255,255,255,0) 46%), ${brandColor}`
+        const headlineText = (resolvedCtaText || 'SCAN ME').trim()
+        const subtitleText = (subtitle || '').trim()
+
+        const headlineFontPx = (text: string, width: number) => {
+            const len = Math.max(1, text.replace(/\s+/g, ' ').trim().length)
+            const raw = (width * 1.7) / len
+            return Math.max(13, Math.min(width * 0.34, raw))
+        }
+
+        const renderHeadline = (text: string, colorVal: string, basePx: number, maxLines = 2) => {
+            const t = text.trim()
+            const currency = t.match(/^([$€£₹¥])(\S.*)$/)
+            const baseStyle: React.CSSProperties = {
+                color: colorVal,
+                fontWeight: 900,
+                lineHeight: 0.96,
+                letterSpacing: t.length > 6 ? '0.01em' : '-0.01em',
+                textTransform: 'uppercase',
+                textAlign: 'center',
+                wordBreak: 'break-word',
+                fontFamily: '"Arial Black", "Archivo Black", Helvetica, Arial, sans-serif',
+                textShadow: brandIsLight ? 'none' : '0 1px 2px rgba(15,23,42,0.28)',
+                overflow: 'hidden',
+                display: '-webkit-box',
+                WebkitLineClamp: maxLines,
+                WebkitBoxOrient: 'vertical',
+            }
+            if (currency) {
+                return (
+                    <span style={{ ...baseStyle, fontSize: basePx }}>
+                        <span style={{ fontSize: basePx * 0.5, verticalAlign: 'top', marginRight: 1, fontWeight: 800 }}>{currency[1]}</span>
+                        {currency[2]}
+                    </span>
+                )
+            }
+            return <span style={{ ...baseStyle, fontSize: basePx }}>{t}</span>
+        }
+
+        const renderSubtitle = (colorVal: string, lineColor: string, fontPx: number) => {
+            if (!subtitleText) return null
+            return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: Math.round(fontPx * 0.55), width: '100%' }}>
+                    <div style={{ width: '44%', height: 2, borderRadius: 999, background: lineColor }} />
+                    <span style={{
+                        color: colorVal,
+                        fontSize: fontPx,
+                        fontWeight: 800,
+                        letterSpacing: '0.14em',
+                        textTransform: 'uppercase',
+                        textAlign: 'center',
+                        lineHeight: 1.15,
+                        fontFamily: 'Helvetica, Arial, sans-serif',
+                    }}>{subtitleText}</span>
+                </div>
+            )
+        }
+
+        const renderPlainQr = (panel: number, round = false) => {
+            // For a round disc the square QR must stay inside the inscribed square (≤ diameter/√2)
+            // so its corners never spill onto the colored badge.
+            const inner = Math.round(panel * (round ? 0.66 : 0.84))
+            return (
+                <div style={{
+                    width: panel,
+                    height: panel,
+                    background: '#ffffff',
+                    borderRadius: round ? '50%' : Math.round(panel * 0.12),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 8px 20px rgba(15,23,42,0.20)',
+                    boxSizing: 'border-box',
+                }}>
+                    <QRCode
+                        ref={qrRef}
+                        value={qrValue}
+                        size={inner}
+                        bgColor="#ffffff"
+                        fgColor={scanLogoVisuals.qrFgColor}
+                        qrStyle="squares"
+                        ecLevel="Q"
+                        quietZone={0}
+                        eyeRadius={[
+                            { outer: [8, 8, 8, 8], inner: [4, 4, 4, 4] },
+                            { outer: [8, 8, 8, 8], inner: [4, 4, 4, 4] },
+                            { outer: [8, 8, 8, 8], inner: [4, 4, 4, 4] },
+                        ]}
+                        logoImage={base64Logo}
+                        logoWidth={inner * 0.24}
+                        logoHeight={inner * 0.24}
+                        logoOpacity={1}
+                        removeQrCodeBehindLogo
+                        logoPaddingStyle="circle"
+                        logoPadding={3}
+                        enableCORS
+                    />
+                </div>
+            )
+        }
+
+        // Connected brand tag (pill with an upward pointer) — used under diamond / pin / triangle / phone frames.
+        const renderTag = (tagFont?: number) => (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ width: 0, height: 0, borderLeft: '8px solid transparent', borderRight: '8px solid transparent', borderBottom: `9px solid ${brandColor}`, marginBottom: -1 }} />
+                <div style={{
+                    background: brandFill,
+                    borderRadius: 12,
+                    padding: subtitleText ? '7px 18px 8px' : '8px 18px',
+                    boxShadow: `0 10px 20px ${brandColor}4d`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 2,
+                    boxSizing: 'border-box',
+                }}>
+                    {renderHeadline(headlineText, onBrand, tagFont ?? Math.max(13, Math.min(19, 210 / Math.max(4, headlineText.length))), 1)}
+                    {subtitleText && (
+                        <span style={{ color: onBrandSoft, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center' }}>{subtitleText}</span>
+                    )}
+                </div>
+            </div>
+        )
+
+        const frameWrapperStyle: React.CSSProperties = {
+            width: 'fit-content',
+            margin: '0 auto',
+            background: 'transparent',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            boxSizing: 'border-box',
+        }
+
+        // FRAME 1 — Arch badge (price / headline on top, QR panel below). Closest to the $34 reference.
+        if (actionFrame === 'arch') {
+            const W = 232
+            const pad = 16
+            const panel = W - pad * 2
+            const hsize = headlineFontPx(headlineText, W - pad * 2)
+            return (
+                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-arch" style={frameWrapperStyle}>
+                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{
+                            width: W,
+                            borderRadius: `${W / 2}px ${W / 2}px 26px 26px`,
+                            background: brandFill,
+                            boxShadow: `0 16px 34px ${brandColor}40, inset 0 1px 0 rgba(255,255,255,0.35)`,
+                            padding: `${Math.round(W * 0.16)}px ${pad}px ${pad}px`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: 12,
+                            boxSizing: 'border-box',
+                        }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, width: '100%' }}>
+                                {renderHeadline(headlineText, onBrand, hsize)}
+                                {renderSubtitle(onBrand, dividerColor, Math.max(9, Math.round(W * 0.05)))}
+                            </div>
+                            {renderPlainQr(panel)}
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+
+        // FRAME 2 — Circle badge with a ribbon banner holding the headline. Like SHOP THIS BOOK.
+        if (actionFrame === 'circle') {
+            const D = 244
+            const panel = Math.round(D * 0.74)
+            const ribbonFont = Math.max(12, Math.min(20, (D * 0.92) / Math.max(4, headlineText.length)))
+            return (
+                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-circle" style={frameWrapperStyle}>
+                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: D }}>
+                        {/* Ribbon banner */}
+                        <div style={{
+                            position: 'relative',
+                            zIndex: 2,
+                            marginBottom: -16,
+                            maxWidth: D * 1.02,
+                            padding: '8px 18px',
+                            borderRadius: 999,
+                            background: brandIsLight ? '#0f172a' : brandColor,
+                            border: `2px solid ${brandIsLight ? 'rgba(15,23,42,0.15)' : 'rgba(255,255,255,0.55)'}`,
+                            boxShadow: `0 8px 18px ${brandColor}55`,
+                            boxSizing: 'border-box',
+                        }}>
+                            {renderHeadline(headlineText, brandIsLight ? '#ffffff' : onBrand, ribbonFont, 1)}
+                        </div>
+                        {/* Circular badge */}
+                        <div style={{
+                            position: 'relative',
+                            width: D,
+                            height: D,
+                            borderRadius: '50%',
+                            background: brandFill,
+                            boxShadow: `0 16px 34px ${brandColor}40, inset 0 1px 0 rgba(255,255,255,0.35)`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxSizing: 'border-box',
+                        }}>
+                            <div style={{ marginTop: subtitleText ? -Math.round(D * 0.06) : 0 }}>
+                                {renderPlainQr(panel, true)}
+                            </div>
+                            {subtitleText && (
+                                <span style={{
+                                    position: 'absolute',
+                                    bottom: Math.round(D * 0.085),
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    color: onBrand,
+                                    fontSize: Math.max(9, Math.round(D * 0.05)),
+                                    fontWeight: 800,
+                                    letterSpacing: '0.16em',
+                                    textTransform: 'uppercase',
+                                    whiteSpace: 'nowrap',
+                                    textShadow: brandIsLight ? 'none' : '0 1px 2px rgba(15,23,42,0.3)',
+                                }}>{subtitleText}</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+
+        // FRAME — Diamond badge. White diamond, QR upright inside, connected tag below.
+        if (actionFrame === 'diamond') {
+            const S = 188
+            const box = Math.round(S * 1.42)
+            const qrPanel = Math.round(S * 0.62)
+            return (
+                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-diamond" style={frameWrapperStyle}>
+                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ position: 'relative', width: box, height: box, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{
+                                width: S,
+                                height: S,
+                                transform: 'rotate(45deg)',
+                                borderRadius: 22,
+                                background: '#ffffff',
+                                border: `4px solid ${brandColor}`,
+                                boxShadow: `0 16px 30px ${brandColor}33`,
+                            }} />
+                            <div style={{ position: 'absolute' }}>{renderPlainQr(qrPanel)}</div>
+                        </div>
+                        <div style={{ marginTop: -Math.round(box * 0.05) }}>{renderTag()}</div>
+                    </div>
+                </div>
+            )
+        }
+
+        // FRAME — Location pin. Teardrop badge with QR in a white disc, tag below.
+        // The teardrop is a rotated square, so it lives inside a √2-sized box that fully
+        // contains the rotated corners (otherwise PNG/JPG export would clip the tip).
+        if (actionFrame === 'pin') {
+            const P = 200
+            const pinBox = Math.round(P * 1.42)
+            const disc = Math.round(P * 0.72)
+            return (
+                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-pin" style={frameWrapperStyle}>
+                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ position: 'relative', width: pinBox, height: pinBox, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{
+                                width: P,
+                                height: P,
+                                borderRadius: '50% 50% 50% 0',
+                                background: brandFill,
+                                boxShadow: `0 16px 32px ${brandColor}40`,
+                                transform: 'rotate(-45deg)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}>
+                                <div style={{ transform: 'rotate(45deg)' }}>{renderPlainQr(disc, true)}</div>
+                            </div>
+                        </div>
+                        <div style={{ marginTop: -Math.round(pinBox * 0.06) }}>{renderTag()}</div>
+                    </div>
+                </div>
+            )
+        }
+
+        // FRAME — Vertical card. Brand header (headline) + QR + brand footer (sub-line).
+        if (actionFrame === 'vertical') {
+            const W = 198
+            const panel = W - 28
+            const headFont = Math.max(13, Math.min(20, (W * 1.4) / Math.max(4, headlineText.length)))
+            return (
+                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-vertical" style={frameWrapperStyle}>
+                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{
+                            width: W,
+                            background: '#ffffff',
+                            borderRadius: 20,
+                            overflow: 'hidden',
+                            border: `3px solid ${brandColor}`,
+                            boxShadow: `0 16px 30px ${brandColor}33`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                        }}>
+                            <div style={{ width: '100%', background: brandFill, padding: '10px 12px', boxSizing: 'border-box', textAlign: 'center' }}>
+                                {renderHeadline(headlineText, onBrand, headFont, 1)}
+                            </div>
+                            <div style={{ padding: 14 }}>{renderPlainQr(panel)}</div>
+                            {subtitleText && (
+                                <div style={{ width: '100%', background: brandFill, padding: '8px 12px', boxSizing: 'border-box', textAlign: 'center' }}>
+                                    <span style={{ color: onBrand, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{subtitleText}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+
+        // FRAME — Wide banner. Text block on the left, QR panel on the right.
+        if (actionFrame === 'wide') {
+            const H = 150
+            const qrPanel = H - 28
+            const headFont = Math.max(16, Math.min(28, 300 / Math.max(4, headlineText.length)))
+            return (
+                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-wide" style={frameWrapperStyle}>
+                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 14,
+                            background: brandFill,
+                            borderRadius: 20,
+                            padding: 14,
+                            boxShadow: `0 16px 30px ${brandColor}40`,
+                            boxSizing: 'border-box',
+                        }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, maxWidth: 150 }}>
+                                {renderHeadline(headlineText, onBrand, headFont, 3)}
+                                {subtitleText && (
+                                    <span style={{ color: onBrandSoft, fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', textAlign: 'center' }}>{subtitleText}</span>
+                                )}
+                            </div>
+                            {renderPlainQr(qrPanel)}
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+
+        // FRAME — Phone mockup. QR on the screen, headline below inside the device.
+        if (actionFrame === 'phone') {
+            const W = 190
+            const Hh = 300
+            const panel = W - 58
+            const headFont = Math.max(13, Math.min(20, (W * 1.4) / Math.max(4, headlineText.length)))
+            return (
+                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-phone" style={frameWrapperStyle}>
+                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{
+                            width: W,
+                            height: Hh,
+                            borderRadius: 30,
+                            border: `7px solid ${brandColor}`,
+                            background: '#0b1020',
+                            boxShadow: `0 18px 40px ${brandColor}33`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '22px 14px 16px',
+                            boxSizing: 'border-box',
+                            position: 'relative',
+                        }}>
+                            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', width: 46, height: 5, borderRadius: 999, background: '#374151' }} />
+                            {renderPlainQr(panel)}
+                            <div style={{ textAlign: 'center' }}>
+                                {renderHeadline(headlineText, '#ffffff', headFont, 1)}
+                                {subtitleText && (
+                                    <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 4, display: 'block' }}>{subtitleText}</span>
+                                )}
+                            </div>
+                            <div style={{ width: 54, height: 4, borderRadius: 999, background: '#ffffff', opacity: 0.85 }} />
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+
+        // FRAME — Play / triangle badge. Big white play triangle with the QR centred inside
+        // its body (vertical left edge, apex points right), tag below. The triangle is sized
+        // so a square QR fits fully between the converging top/bottom edges.
+        if (actionFrame === 'triangle') {
+            const Tw = 268
+            const Th = 244
+            const qrPanel = 96
+            return (
+                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-triangle" style={frameWrapperStyle}>
+                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ position: 'relative', width: Tw, height: Th }}>
+                            <svg width={Tw} height={Th} viewBox="0 0 268 244" style={{ position: 'absolute', top: 0, left: 0 }}>
+                                <path d="M24 18 L248 122 L24 226 Z" fill="#ffffff" stroke={brandColor} strokeWidth="7" strokeLinejoin="round" />
+                            </svg>
+                            <div style={{ position: 'absolute', left: 40, top: '50%', transform: 'translateY(-50%)' }}>
+                                {renderPlainQr(qrPanel)}
+                            </div>
+                        </div>
+                        <div style={{ marginTop: 6 }}>{renderTag()}</div>
+                    </div>
+                </div>
+            )
+        }
+
+        // FRAME — Bracket frame. Camera-style corner brackets around the QR with a tag below.
+        if (actionFrame === 'brackets') {
+            const panel = 196
+            const b = 4
+            const len = 34
+            const corner = (pos: React.CSSProperties): React.CSSProperties => ({ position: 'absolute', width: len, height: len, ...pos })
+            return (
+                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-brackets" style={frameWrapperStyle}>
+                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ position: 'relative', padding: 14 }}>
+                            <div style={corner({ top: 0, left: 0, borderTop: `${b}px solid ${brandColor}`, borderLeft: `${b}px solid ${brandColor}`, borderTopLeftRadius: 12 })} />
+                            <div style={corner({ top: 0, right: 0, borderTop: `${b}px solid ${brandColor}`, borderRight: `${b}px solid ${brandColor}`, borderTopRightRadius: 12 })} />
+                            <div style={corner({ bottom: 0, left: 0, borderBottom: `${b}px solid ${brandColor}`, borderLeft: `${b}px solid ${brandColor}`, borderBottomLeftRadius: 12 })} />
+                            <div style={corner({ bottom: 0, right: 0, borderBottom: `${b}px solid ${brandColor}`, borderRight: `${b}px solid ${brandColor}`, borderBottomRightRadius: 12 })} />
+                            {renderPlainQr(panel)}
+                        </div>
+                        <div style={{ marginTop: 10 }}>{renderTag()}</div>
+                    </div>
+                </div>
+            )
+        }
+
+        // FRAME 3 — Ticket card with a connected button/tail carrying the headline. Like the SCAN-TO cards.
+        const W = 212
+        const panel = W - 28
+        const hsize = Math.min(headlineFontPx(headlineText, W * 0.84), 26)
+        return (
+            <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-ticket" style={frameWrapperStyle}>
+                <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{
+                        width: W,
+                        background: '#ffffff',
+                        borderRadius: 22,
+                        border: `3px solid ${brandColor}`,
+                        boxShadow: `0 16px 30px ${brandColor}33`,
+                        padding: 14,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxSizing: 'border-box',
+                        position: 'relative',
+                        zIndex: 1,
+                    }}>
+                        {renderPlainQr(panel)}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{
+                            width: 0,
+                            height: 0,
+                            borderLeft: '9px solid transparent',
+                            borderRight: '9px solid transparent',
+                            borderBottom: `10px solid ${brandColor}`,
+                            marginTop: -1,
+                        }} />
+                        <div style={{
+                            background: brandFill,
+                            borderRadius: 14,
+                            padding: subtitleText ? '8px 22px 9px' : '10px 22px',
+                            boxShadow: `0 10px 22px ${brandColor}4d`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: 3,
+                            maxWidth: W + 24,
+                            boxSizing: 'border-box',
+                        }}>
+                            {renderHeadline(headlineText, onBrand, hsize, 1)}
+                            {subtitleText && (
+                                <span style={{
+                                    color: onBrandSoft,
+                                    fontSize: 9,
+                                    fontWeight: 800,
+                                    letterSpacing: '0.12em',
+                                    textTransform: 'uppercase',
+                                    textAlign: 'center',
+                                }}>{subtitleText}</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div
             ref={wrapperRef}
@@ -517,7 +1105,14 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                     position: 'relative',
                 } as React.CSSProperties}
             >
-                <div className="scanlogo-wrapper-shell scanlogo-animation-node" />
+                <div
+                    className="scanlogo-wrapper-shell scanlogo-animation-node"
+                    style={{
+                        borderRadius: getWrapperShellRadius(normalizedShape),
+                        background: 'transparent',
+                        border: 'none',
+                    }}
+                />
 
                 {/* Static wrapper shape */}
                 <svg
@@ -525,13 +1120,25 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                     width="100%"
                     height="100%"
                     viewBox="0 0 24 24"
-                    fill={scanLogoVisuals.shapeFillStrongColor}
+                    fill={`url(#${shapeGradientId})`}
                     stroke={scanLogoVisuals.shapeStrokeColor}
                     strokeWidth={Math.max(0.9, (3 * 24) / shapeSize)}
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    style={{ position: 'absolute', top: 0, left: 0, zIndex: 0 }}
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        zIndex: 0,
+                        filter: 'drop-shadow(0 4px 10px rgba(15, 23, 42, 0.22))'
+                    }}
                 >
+                    <defs>
+                        <linearGradient id={shapeGradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor={scanLogoVisuals.wrapperGradientStart} />
+                            <stop offset="100%" stopColor={scanLogoVisuals.wrapperGradientEnd} />
+                        </linearGradient>
+                    </defs>
                     {SHAPE_SVG_PATHS[normalizedShape] || SHAPE_SVG_PATHS['square']}
                 </svg>
 
@@ -547,14 +1154,14 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                     strokeLinejoin="round"
                     style={{ position: 'absolute', top: 0, left: 0, zIndex: 1 }}
                 >
-                    <g transform="translate(12 12) scale(0.82) translate(-12 -12)">
+                    <g transform={`translate(12 12) scale(${normalizedShape === 'square' ? 0.84 : 0.88}) translate(-12 -12)`}>
                         {SHAPE_SVG_PATHS[normalizedShape] || SHAPE_SVG_PATHS['square']}
                     </g>
                 </svg>
 
                 {!compactMode && (
                     <>
-                        <svg className="scanlogo-orbit-ring scanlogo-orbit-ring-primary scanlogo-animation-node" viewBox="0 0 100 100" aria-hidden="true">
+                        <svg className="scanlogo-orbit-ring scanlogo-orbit-ring-primary scanlogo-animation-node" viewBox="0 0 100 100" aria-hidden="true" style={{ overflow: 'visible' }}>
                             <defs>
                                 <path id={orbitPathPrimaryId} d="M 50,50 m -41,0 a 41,41 0 1,1 82,0 a 41,41 0 1,1 -82,0" />
                             </defs>
@@ -571,7 +1178,7 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                             </text>
                         </svg>
 
-                        <svg className="scanlogo-orbit-ring scanlogo-orbit-ring-secondary scanlogo-animation-node" viewBox="0 0 100 100" aria-hidden="true">
+                        <svg className="scanlogo-orbit-ring scanlogo-orbit-ring-secondary scanlogo-animation-node" viewBox="0 0 100 100" aria-hidden="true" style={{ overflow: 'visible' }}>
                             <defs>
                                 <path id={orbitPathSecondaryId} d="M 50,50 m -35,0 a 35,35 0 1,1 70,0 a 35,35 0 1,1 -70,0" />
                             </defs>
@@ -611,16 +1218,12 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                         ref={qrRef}
                         value={qrValue}
                         size={qrRenderSize}
-                        bgColor={scanLogoVisuals.qrBgColor}
+                        bgColor="transparent"
                         fgColor={scanLogoVisuals.qrFgColor}
                         qrStyle="squares"
                         ecLevel="Q"
                         quietZone={2}
-                        eyeRadius={[
-                            { outer: [8, 8, 0, 8], inner: [4, 4, 0, 4] },
-                            { outer: [8, 8, 8, 0], inner: [4, 4, 4, 0] },
-                            { outer: [8, 0, 8, 8], inner: [4, 0, 4, 4] },
-                        ]}
+                        eyeRadius={getEyeRadiusForShape(normalizedShape)}
                         logoImage={base64Logo}
                         logoWidth={qrRenderSize * 0.16}
                         logoHeight={qrRenderSize * 0.16}

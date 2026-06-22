@@ -119,7 +119,9 @@ export const scanLogoApi = {
     color?: string;
     wrapper_color?: string;
     cta_text?: string;
+    subtitle?: string;
     safe_scan_badge?: boolean;
+    banner?: string;
   }) => api.post('/scanlogos', data),
   update: (id: number, data: Record<string, unknown>) =>
     api.put(`/scanlogos/${id}`, data),

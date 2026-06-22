@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php artisan *)",
+      "Bash(python3 -)",
+      "Bash(npx tsc *)",
+      "Bash(tee /tmp/tsc.log)",
+      "Bash(tee /tmp/tsc3.log)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  }
+}

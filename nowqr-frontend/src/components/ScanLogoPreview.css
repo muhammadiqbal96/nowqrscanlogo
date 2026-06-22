@@ -75,6 +75,7 @@
     z-index: 5;
     pointer-events: none;
     opacity: 0;
+    overflow: visible;
 }
 
 .scanlogo-orbit-guide {
@@ -204,7 +205,7 @@
 }
 
 .scanlogo-cta-text {
-    font-size: 13px;
+    font-size: 18px;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.12em;

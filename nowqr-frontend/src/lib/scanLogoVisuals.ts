@@ -187,17 +187,17 @@ export function getQrScaleForShape(shape?: string): number {
     const normalizedShape = (shape || '').toLowerCase()
 
     // Keep QR fully inside each shape border while preserving scan reliability.
-    if (normalizedShape === 'square') return 0.74
-    if (normalizedShape === 'circle') return 0.7
-    if (normalizedShape === 'hexagon') return 0.66
-    if (normalizedShape === 'shield') return 0.64
-    if (normalizedShape === 'diamond') return 0.58
-    if (normalizedShape === 'gear') return 0.6
-    if (normalizedShape === 'eye') return 0.54
-    if (normalizedShape === 'drum') return 0.64
-    if (normalizedShape === 'tv') return 0.64
+    if (normalizedShape === 'square') return 0.88
+    if (normalizedShape === 'circle') return 0.85
+    if (normalizedShape === 'hexagon') return 0.82
+    if (normalizedShape === 'shield') return 0.8
+    if (normalizedShape === 'diamond') return 0.76
+    if (normalizedShape === 'gear') return 0.78
+    if (normalizedShape === 'eye') return 0.74
+    if (normalizedShape === 'drum') return 0.82
+    if (normalizedShape === 'tv') return 0.82
 
-    return 0.62
+    return 0.78
 }
 
 export function getShapeFrameScale(shape?: string): number {
