@@ -402,6 +402,9 @@ export default function ScanLogoDetailPage() {
                                     {downloadingFormat === 'gif' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} GIF
                                 </button>
                             </div>
+                            <p className="text-[10px] text-muted-foreground text-center leading-snug mt-1">
+                                To make the link tappable in a text or post, copy your <span className="font-semibold">Short URL</span> above and paste it in the caption/message — an image can't carry a tap link, but the QR always scans.
+                            </p>
                         </div>
                     </div>
                 </div>

@@ -16,6 +16,8 @@ export interface ScanLogoPreviewProps {
     ctaText?: string
     /** Secondary "where the action goes" line shown under the headline (Action ScanLogo frames) */
     subtitle?: string
+    /** Show the tappable short URL under the QR on Action ScanLogo frames (default true) */
+    showShortUrl?: boolean
     safeScanBadge?: boolean
     centerLogoUrl?: string | null
     shortUrl?: string
@@ -166,6 +168,34 @@ const isLightColor = (hex?: string) => {
     return false
 }
 
+// Measure rendered text width with an offscreen canvas so headlines can be auto-fit
+// to their box (no more awkward "FACEBO/OK" wraps) instead of guessing from char count.
+let _measureCtx: CanvasRenderingContext2D | null = null
+function measureTextWidth(text: string, fontPx: number): number {
+    const family = '"Arial Black", "Archivo Black", Helvetica, Arial, sans-serif'
+    if (typeof document !== 'undefined') {
+        if (!_measureCtx) _measureCtx = document.createElement('canvas').getContext('2d')
+        if (_measureCtx) {
+            _measureCtx.font = `900 ${fontPx}px ${family}`
+            return _measureCtx.measureText(text).width
+        }
+    }
+    return text.length * fontPx * 0.62
+}
+
+function fitHeadlineFont(text: string, boxWidth: number, maxFont: number, minFont: number, maxLines: number): number {
+    const clean = (text || '').replace(/\s+/g, ' ').trim() || ' '
+    const longest = clean.split(' ').reduce((a, b) => (b.length > a.length ? b : a), '')
+    // Width per 1px of font. Floor at the worst-case Arial Black cap advance (~0.72em/char)
+    // so a broken/zero canvas measurement can never oversize the font and force a wrap.
+    const fullPerPx = Math.max(measureTextWidth(clean, 100) / 100, clean.length * 0.72)
+    const longestPerPx = Math.max(measureTextWidth(longest, 100) / 100, longest.length * 0.72)
+    // Fit the whole string across the allowed lines, and never let the longest word overflow one line.
+    const byTotal = (boxWidth * maxLines * 0.94) / fullPerPx
+    const byWord = (boxWidth * 0.98) / longestPerPx
+    return Math.max(minFont, Math.min(maxFont, byTotal, byWord))
+}
+
 const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(function ScanLogoPreview({
     url,
     shape = 'shield',
@@ -174,6 +204,7 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
     wrapperColor,
     ctaText = 'TAP TO SCAN',
     subtitle,
+    showShortUrl = true,
     safeScanBadge = true,
     centerLogoUrl,
     shortUrl,
@@ -565,12 +596,8 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
         const brandFill = `linear-gradient(165deg, rgba(255,255,255,0.26), rgba(255,255,255,0) 46%), ${brandColor}`
         const headlineText = (resolvedCtaText || 'SCAN ME').trim()
         const subtitleText = (subtitle || '').trim()
-
-        const headlineFontPx = (text: string, width: number) => {
-            const len = Math.max(1, text.replace(/\s+/g, ' ').trim().length)
-            const raw = (width * 1.7) / len
-            return Math.max(13, Math.min(width * 0.34, raw))
-        }
+        const shortUrlText = (shortUrl || url || '').replace(/^https?:\/\//i, '').replace(/\/+$/, '')
+        const shortUrlHref = shortUrl || url || '#'
 
         const renderHeadline = (text: string, colorVal: string, basePx: number, maxLines = 2) => {
             const t = text.trim()
@@ -621,8 +648,7 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
         }
 
         const renderPlainQr = (panel: number, round = false) => {
-            // For a round disc the square QR must stay inside the inscribed square (≤ diameter/√2)
-            // so its corners never spill onto the colored badge.
+            // For a round disc the square QR must stay inside the inscribed square (≤ diameter/√2).
             const inner = Math.round(panel * (round ? 0.66 : 0.84))
             return (
                 <div style={{
@@ -643,7 +669,7 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                         bgColor="#ffffff"
                         fgColor={scanLogoVisuals.qrFgColor}
                         qrStyle="squares"
-                        ecLevel="Q"
+                        ecLevel="H"
                         quietZone={0}
                         eyeRadius={[
                             { outer: [8, 8, 8, 8], inner: [4, 4, 4, 4] },
@@ -651,8 +677,8 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                             { outer: [8, 8, 8, 8], inner: [4, 4, 4, 4] },
                         ]}
                         logoImage={base64Logo}
-                        logoWidth={inner * 0.24}
-                        logoHeight={inner * 0.24}
+                        logoWidth={inner * 0.3}
+                        logoHeight={inner * 0.3}
                         logoOpacity={1}
                         removeQrCodeBehindLogo
                         logoPaddingStyle="circle"
@@ -663,28 +689,31 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
             )
         }
 
-        // Connected brand tag (pill with an upward pointer) — used under diamond / pin / triangle / phone frames.
-        const renderTag = (tagFont?: number) => (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ width: 0, height: 0, borderLeft: '8px solid transparent', borderRight: '8px solid transparent', borderBottom: `9px solid ${brandColor}`, marginBottom: -1 }} />
-                <div style={{
-                    background: brandFill,
-                    borderRadius: 12,
-                    padding: subtitleText ? '7px 18px 8px' : '8px 18px',
-                    boxShadow: `0 10px 20px ${brandColor}4d`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 2,
-                    boxSizing: 'border-box',
-                }}>
-                    {renderHeadline(headlineText, onBrand, tagFont ?? Math.max(13, Math.min(19, 210 / Math.max(4, headlineText.length))), 1)}
-                    {subtitleText && (
-                        <span style={{ color: onBrandSoft, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center' }}>{subtitleText}</span>
-                    )}
+        // Connected brand tag (pill with an upward pointer) — used under diamond / pin / triangle / brackets.
+        const renderTag = (maxW = 200) => {
+            const tagFont = fitHeadlineFont(headlineText, maxW, 20, 12, 1)
+            return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ width: 0, height: 0, borderLeft: '8px solid transparent', borderRight: '8px solid transparent', borderBottom: `9px solid ${brandColor}`, marginBottom: -1 }} />
+                    <div style={{
+                        background: brandFill,
+                        borderRadius: 12,
+                        padding: subtitleText ? '7px 18px 8px' : '8px 18px',
+                        boxShadow: `0 10px 20px ${brandColor}4d`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 2,
+                        boxSizing: 'border-box',
+                    }}>
+                        {renderHeadline(headlineText, onBrand, tagFont, 1)}
+                        {subtitleText && (
+                            <span style={{ color: onBrandSoft, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center' }}>{subtitleText}</span>
+                        )}
+                    </div>
                 </div>
-            </div>
-        )
+            )
+        }
 
         const frameWrapperStyle: React.CSSProperties = {
             width: 'fit-content',
@@ -696,312 +725,230 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
             boxSizing: 'border-box',
         }
 
-        // FRAME 1 — Arch badge (price / headline on top, QR panel below). Closest to the $34 reference.
+        let graphic: React.ReactNode = null
+
         if (actionFrame === 'arch') {
             const W = 232
             const pad = 16
             const panel = W - pad * 2
-            const hsize = headlineFontPx(headlineText, W - pad * 2)
-            return (
-                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-arch" style={frameWrapperStyle}>
-                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{
-                            width: W,
-                            borderRadius: `${W / 2}px ${W / 2}px 26px 26px`,
-                            background: brandFill,
-                            boxShadow: `0 16px 34px ${brandColor}40, inset 0 1px 0 rgba(255,255,255,0.35)`,
-                            padding: `${Math.round(W * 0.16)}px ${pad}px ${pad}px`,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 12,
-                            boxSizing: 'border-box',
-                        }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, width: '100%' }}>
-                                {renderHeadline(headlineText, onBrand, hsize)}
-                                {renderSubtitle(onBrand, dividerColor, Math.max(9, Math.round(W * 0.05)))}
-                            </div>
-                            {renderPlainQr(panel)}
-                        </div>
+            // The arch top is a semicircle, so the headline band is narrower than the QR panel.
+            // Fit the text to that inner curved width (and cap the container) so it never spills
+            // past the rounded sides.
+            const headBox = Math.round(panel * 0.72)
+            const hsize = fitHeadlineFont(headlineText, headBox, 64, 16, 2)
+            graphic = (
+                <div style={{
+                    width: W,
+                    borderRadius: `${W / 2}px ${W / 2}px 26px 26px`,
+                    background: brandFill,
+                    boxShadow: `0 16px 34px ${brandColor}40, inset 0 1px 0 rgba(255,255,255,0.35)`,
+                    padding: `${Math.round(W * 0.16)}px ${pad}px ${pad}px`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 12,
+                    boxSizing: 'border-box',
+                }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, width: '100%', maxWidth: headBox }}>
+                        {renderHeadline(headlineText, onBrand, hsize)}
+                        {renderSubtitle(onBrand, dividerColor, Math.max(9, Math.round(W * 0.05)))}
                     </div>
+                    {renderPlainQr(panel)}
                 </div>
             )
-        }
-
-        // FRAME 2 — Circle badge with a ribbon banner holding the headline. Like SHOP THIS BOOK.
-        if (actionFrame === 'circle') {
+        } else if (actionFrame === 'circle') {
             const D = 244
             const panel = Math.round(D * 0.74)
-            const ribbonFont = Math.max(12, Math.min(20, (D * 0.92) / Math.max(4, headlineText.length)))
-            return (
-                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-circle" style={frameWrapperStyle}>
-                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: D }}>
-                        {/* Ribbon banner */}
-                        <div style={{
-                            position: 'relative',
-                            zIndex: 2,
-                            marginBottom: -16,
-                            maxWidth: D * 1.02,
-                            padding: '8px 18px',
-                            borderRadius: 999,
-                            background: brandIsLight ? '#0f172a' : brandColor,
-                            border: `2px solid ${brandIsLight ? 'rgba(15,23,42,0.15)' : 'rgba(255,255,255,0.55)'}`,
-                            boxShadow: `0 8px 18px ${brandColor}55`,
-                            boxSizing: 'border-box',
-                        }}>
-                            {renderHeadline(headlineText, brandIsLight ? '#ffffff' : onBrand, ribbonFont, 1)}
-                        </div>
-                        {/* Circular badge */}
-                        <div style={{
-                            position: 'relative',
-                            width: D,
-                            height: D,
-                            borderRadius: '50%',
-                            background: brandFill,
-                            boxShadow: `0 16px 34px ${brandColor}40, inset 0 1px 0 rgba(255,255,255,0.35)`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxSizing: 'border-box',
-                        }}>
-                            <div style={{ marginTop: subtitleText ? -Math.round(D * 0.06) : 0 }}>
-                                {renderPlainQr(panel, true)}
-                            </div>
-                            {subtitleText && (
-                                <span style={{
-                                    position: 'absolute',
-                                    bottom: Math.round(D * 0.085),
-                                    left: '50%',
-                                    transform: 'translateX(-50%)',
-                                    color: onBrand,
-                                    fontSize: Math.max(9, Math.round(D * 0.05)),
-                                    fontWeight: 800,
-                                    letterSpacing: '0.16em',
-                                    textTransform: 'uppercase',
-                                    whiteSpace: 'nowrap',
-                                    textShadow: brandIsLight ? 'none' : '0 1px 2px rgba(15,23,42,0.3)',
-                                }}>{subtitleText}</span>
-                            )}
-                        </div>
+            const ribbonFont = fitHeadlineFont(headlineText, D * 0.84, 22, 12, 1)
+            graphic = (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: D }}>
+                    <div style={{
+                        position: 'relative',
+                        zIndex: 2,
+                        marginBottom: -16,
+                        maxWidth: D * 1.02,
+                        padding: '8px 18px',
+                        borderRadius: 999,
+                        background: brandIsLight ? '#0f172a' : brandColor,
+                        border: `2px solid ${brandIsLight ? 'rgba(15,23,42,0.15)' : 'rgba(255,255,255,0.55)'}`,
+                        boxShadow: `0 8px 18px ${brandColor}55`,
+                        boxSizing: 'border-box',
+                    }}>
+                        {renderHeadline(headlineText, brandIsLight ? '#ffffff' : onBrand, ribbonFont, 1)}
+                    </div>
+                    <div style={{
+                        position: 'relative',
+                        width: D,
+                        height: D,
+                        borderRadius: '50%',
+                        background: brandFill,
+                        boxShadow: `0 16px 34px ${brandColor}40, inset 0 1px 0 rgba(255,255,255,0.35)`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxSizing: 'border-box',
+                    }}>
+                        <div style={{ marginTop: subtitleText ? -Math.round(D * 0.06) : 0 }}>{renderPlainQr(panel, true)}</div>
+                        {subtitleText && (
+                            <span style={{
+                                position: 'absolute',
+                                bottom: Math.round(D * 0.085),
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                color: onBrand,
+                                fontSize: Math.max(9, Math.round(D * 0.05)),
+                                fontWeight: 800,
+                                letterSpacing: '0.16em',
+                                textTransform: 'uppercase',
+                                whiteSpace: 'nowrap',
+                                textShadow: brandIsLight ? 'none' : '0 1px 2px rgba(15,23,42,0.3)',
+                            }}>{subtitleText}</span>
+                        )}
                     </div>
                 </div>
             )
-        }
-
-        // FRAME — Diamond badge. White diamond, QR upright inside, connected tag below.
-        if (actionFrame === 'diamond') {
+        } else if (actionFrame === 'diamond') {
             const S = 188
             const box = Math.round(S * 1.42)
             const qrPanel = Math.round(S * 0.62)
-            return (
-                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-diamond" style={frameWrapperStyle}>
-                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{ position: 'relative', width: box, height: box, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <div style={{
-                                width: S,
-                                height: S,
-                                transform: 'rotate(45deg)',
-                                borderRadius: 22,
-                                background: '#ffffff',
-                                border: `4px solid ${brandColor}`,
-                                boxShadow: `0 16px 30px ${brandColor}33`,
-                            }} />
-                            <div style={{ position: 'absolute' }}>{renderPlainQr(qrPanel)}</div>
-                        </div>
-                        <div style={{ marginTop: -Math.round(box * 0.05) }}>{renderTag()}</div>
+            graphic = (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ position: 'relative', width: box, height: box, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: S, height: S, transform: 'rotate(45deg)', borderRadius: 22, background: '#ffffff', border: `4px solid ${brandColor}`, boxShadow: `0 16px 30px ${brandColor}33` }} />
+                        <div style={{ position: 'absolute' }}>{renderPlainQr(qrPanel)}</div>
                     </div>
+                    <div style={{ marginTop: -Math.round(box * 0.05) }}>{renderTag()}</div>
                 </div>
             )
-        }
-
-        // FRAME — Location pin. Teardrop badge with QR in a white disc, tag below.
-        // The teardrop is a rotated square, so it lives inside a √2-sized box that fully
-        // contains the rotated corners (otherwise PNG/JPG export would clip the tip).
-        if (actionFrame === 'pin') {
+        } else if (actionFrame === 'pin') {
             const P = 200
             const pinBox = Math.round(P * 1.42)
             const disc = Math.round(P * 0.72)
-            return (
-                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-pin" style={frameWrapperStyle}>
-                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{ position: 'relative', width: pinBox, height: pinBox, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <div style={{
-                                width: P,
-                                height: P,
-                                borderRadius: '50% 50% 50% 0',
-                                background: brandFill,
-                                boxShadow: `0 16px 32px ${brandColor}40`,
-                                transform: 'rotate(-45deg)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                            }}>
-                                <div style={{ transform: 'rotate(45deg)' }}>{renderPlainQr(disc, true)}</div>
-                            </div>
+            graphic = (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ position: 'relative', width: pinBox, height: pinBox, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{
+                            width: P,
+                            height: P,
+                            borderRadius: '50% 50% 50% 0',
+                            background: brandFill,
+                            boxShadow: `0 16px 32px ${brandColor}40`,
+                            transform: 'rotate(-45deg)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}>
+                            <div style={{ transform: 'rotate(45deg)' }}>{renderPlainQr(disc, true)}</div>
                         </div>
-                        <div style={{ marginTop: -Math.round(pinBox * 0.06) }}>{renderTag()}</div>
                     </div>
+                    <div style={{ marginTop: -Math.round(pinBox * 0.06) }}>{renderTag()}</div>
                 </div>
             )
-        }
-
-        // FRAME — Vertical card. Brand header (headline) + QR + brand footer (sub-line).
-        if (actionFrame === 'vertical') {
+        } else if (actionFrame === 'vertical') {
             const W = 198
             const panel = W - 28
-            const headFont = Math.max(13, Math.min(20, (W * 1.4) / Math.max(4, headlineText.length)))
-            return (
-                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-vertical" style={frameWrapperStyle}>
-                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{
-                            width: W,
-                            background: '#ffffff',
-                            borderRadius: 20,
-                            overflow: 'hidden',
-                            border: `3px solid ${brandColor}`,
-                            boxShadow: `0 16px 30px ${brandColor}33`,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                        }}>
-                            <div style={{ width: '100%', background: brandFill, padding: '10px 12px', boxSizing: 'border-box', textAlign: 'center' }}>
-                                {renderHeadline(headlineText, onBrand, headFont, 1)}
-                            </div>
-                            <div style={{ padding: 14 }}>{renderPlainQr(panel)}</div>
-                            {subtitleText && (
-                                <div style={{ width: '100%', background: brandFill, padding: '8px 12px', boxSizing: 'border-box', textAlign: 'center' }}>
-                                    <span style={{ color: onBrand, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{subtitleText}</span>
-                                </div>
-                            )}
-                        </div>
+            const headFont = fitHeadlineFont(headlineText, W - 24, 22, 12, 1)
+            graphic = (
+                <div style={{ width: W, background: '#ffffff', borderRadius: 20, overflow: 'hidden', border: `3px solid ${brandColor}`, boxShadow: `0 16px 30px ${brandColor}33`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ width: '100%', background: brandFill, padding: '10px 12px', boxSizing: 'border-box', textAlign: 'center' }}>
+                        {renderHeadline(headlineText, onBrand, headFont, 1)}
                     </div>
+                    <div style={{ padding: 14 }}>{renderPlainQr(panel)}</div>
+                    {subtitleText && (
+                        <div style={{ width: '100%', background: brandFill, padding: '8px 12px', boxSizing: 'border-box', textAlign: 'center' }}>
+                            <span style={{ color: onBrand, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{subtitleText}</span>
+                        </div>
+                    )}
                 </div>
             )
-        }
-
-        // FRAME — Wide banner. Text block on the left, QR panel on the right.
-        if (actionFrame === 'wide') {
+        } else if (actionFrame === 'wide') {
             const H = 150
             const qrPanel = H - 28
-            const headFont = Math.max(16, Math.min(28, 300 / Math.max(4, headlineText.length)))
-            return (
-                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-wide" style={frameWrapperStyle}>
-                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 14,
-                            background: brandFill,
-                            borderRadius: 20,
-                            padding: 14,
-                            boxShadow: `0 16px 30px ${brandColor}40`,
-                            boxSizing: 'border-box',
-                        }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, maxWidth: 150 }}>
-                                {renderHeadline(headlineText, onBrand, headFont, 3)}
-                                {subtitleText && (
-                                    <span style={{ color: onBrandSoft, fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', textAlign: 'center' }}>{subtitleText}</span>
-                                )}
-                            </div>
-                            {renderPlainQr(qrPanel)}
-                        </div>
+            const headFont = fitHeadlineFont(headlineText, 150, 30, 14, 3)
+            graphic = (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: brandFill, borderRadius: 20, padding: 14, boxShadow: `0 16px 30px ${brandColor}40`, boxSizing: 'border-box' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, maxWidth: 150 }}>
+                        {renderHeadline(headlineText, onBrand, headFont, 3)}
+                        {subtitleText && (
+                            <span style={{ color: onBrandSoft, fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', textAlign: 'center' }}>{subtitleText}</span>
+                        )}
                     </div>
+                    {renderPlainQr(qrPanel)}
                 </div>
             )
-        }
-
-        // FRAME — Phone mockup. QR on the screen, headline below inside the device.
-        if (actionFrame === 'phone') {
+        } else if (actionFrame === 'phone') {
             const W = 190
             const Hh = 300
             const panel = W - 58
-            const headFont = Math.max(13, Math.min(20, (W * 1.4) / Math.max(4, headlineText.length)))
-            return (
-                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-phone" style={frameWrapperStyle}>
-                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{
-                            width: W,
-                            height: Hh,
-                            borderRadius: 30,
-                            border: `7px solid ${brandColor}`,
-                            background: '#0b1020',
-                            boxShadow: `0 18px 40px ${brandColor}33`,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '22px 14px 16px',
-                            boxSizing: 'border-box',
-                            position: 'relative',
-                        }}>
-                            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', width: 46, height: 5, borderRadius: 999, background: '#374151' }} />
-                            {renderPlainQr(panel)}
-                            <div style={{ textAlign: 'center' }}>
-                                {renderHeadline(headlineText, '#ffffff', headFont, 1)}
-                                {subtitleText && (
-                                    <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 4, display: 'block' }}>{subtitleText}</span>
-                                )}
-                            </div>
-                            <div style={{ width: 54, height: 4, borderRadius: 999, background: '#ffffff', opacity: 0.85 }} />
-                        </div>
+            const headFont = fitHeadlineFont(headlineText, W - 28, 22, 12, 1)
+            graphic = (
+                <div style={{
+                    width: W,
+                    height: Hh,
+                    borderRadius: 30,
+                    border: `7px solid ${brandColor}`,
+                    background: '#0b1020',
+                    boxShadow: `0 18px 40px ${brandColor}33`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '22px 14px 16px',
+                    boxSizing: 'border-box',
+                    position: 'relative',
+                }}>
+                    <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', width: 46, height: 5, borderRadius: 999, background: '#374151' }} />
+                    {renderPlainQr(panel)}
+                    <div style={{ textAlign: 'center' }}>
+                        {renderHeadline(headlineText, '#ffffff', headFont, 1)}
+                        {subtitleText && (
+                            <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 4, display: 'block' }}>{subtitleText}</span>
+                        )}
                     </div>
+                    <div style={{ width: 54, height: 4, borderRadius: 999, background: '#ffffff', opacity: 0.85 }} />
                 </div>
             )
-        }
-
-        // FRAME — Play / triangle badge. Big white play triangle with the QR centred inside
-        // its body (vertical left edge, apex points right), tag below. The triangle is sized
-        // so a square QR fits fully between the converging top/bottom edges.
-        if (actionFrame === 'triangle') {
+        } else if (actionFrame === 'triangle') {
             const Tw = 268
             const Th = 244
             const qrPanel = 96
-            return (
-                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-triangle" style={frameWrapperStyle}>
-                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{ position: 'relative', width: Tw, height: Th }}>
-                            <svg width={Tw} height={Th} viewBox="0 0 268 244" style={{ position: 'absolute', top: 0, left: 0 }}>
-                                <path d="M24 18 L248 122 L24 226 Z" fill="#ffffff" stroke={brandColor} strokeWidth="7" strokeLinejoin="round" />
-                            </svg>
-                            <div style={{ position: 'absolute', left: 40, top: '50%', transform: 'translateY(-50%)' }}>
-                                {renderPlainQr(qrPanel)}
-                            </div>
+            graphic = (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ position: 'relative', width: Tw, height: Th }}>
+                        <svg width={Tw} height={Th} viewBox="0 0 268 244" style={{ position: 'absolute', top: 0, left: 0 }}>
+                            <path d="M24 18 L248 122 L24 226 Z" fill="#ffffff" stroke={brandColor} strokeWidth="7" strokeLinejoin="round" />
+                        </svg>
+                        <div style={{ position: 'absolute', left: 40, top: '50%', transform: 'translateY(-50%)' }}>
+                            {renderPlainQr(qrPanel)}
                         </div>
-                        <div style={{ marginTop: 6 }}>{renderTag()}</div>
                     </div>
+                    <div style={{ marginTop: 6 }}>{renderTag()}</div>
                 </div>
             )
-        }
-
-        // FRAME — Bracket frame. Camera-style corner brackets around the QR with a tag below.
-        if (actionFrame === 'brackets') {
+        } else if (actionFrame === 'brackets') {
             const panel = 196
             const b = 4
             const len = 34
             const corner = (pos: React.CSSProperties): React.CSSProperties => ({ position: 'absolute', width: len, height: len, ...pos })
-            return (
-                <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-brackets" style={frameWrapperStyle}>
-                    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{ position: 'relative', padding: 14 }}>
-                            <div style={corner({ top: 0, left: 0, borderTop: `${b}px solid ${brandColor}`, borderLeft: `${b}px solid ${brandColor}`, borderTopLeftRadius: 12 })} />
-                            <div style={corner({ top: 0, right: 0, borderTop: `${b}px solid ${brandColor}`, borderRight: `${b}px solid ${brandColor}`, borderTopRightRadius: 12 })} />
-                            <div style={corner({ bottom: 0, left: 0, borderBottom: `${b}px solid ${brandColor}`, borderLeft: `${b}px solid ${brandColor}`, borderBottomLeftRadius: 12 })} />
-                            <div style={corner({ bottom: 0, right: 0, borderBottom: `${b}px solid ${brandColor}`, borderRight: `${b}px solid ${brandColor}`, borderBottomRightRadius: 12 })} />
-                            {renderPlainQr(panel)}
-                        </div>
-                        <div style={{ marginTop: 10 }}>{renderTag()}</div>
+            graphic = (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ position: 'relative', padding: 14 }}>
+                        <div style={corner({ top: 0, left: 0, borderTop: `${b}px solid ${brandColor}`, borderLeft: `${b}px solid ${brandColor}`, borderTopLeftRadius: 12 })} />
+                        <div style={corner({ top: 0, right: 0, borderTop: `${b}px solid ${brandColor}`, borderRight: `${b}px solid ${brandColor}`, borderTopRightRadius: 12 })} />
+                        <div style={corner({ bottom: 0, left: 0, borderBottom: `${b}px solid ${brandColor}`, borderLeft: `${b}px solid ${brandColor}`, borderBottomLeftRadius: 12 })} />
+                        <div style={corner({ bottom: 0, right: 0, borderBottom: `${b}px solid ${brandColor}`, borderRight: `${b}px solid ${brandColor}`, borderBottomRightRadius: 12 })} />
+                        {renderPlainQr(panel)}
                     </div>
+                    <div style={{ marginTop: 10 }}>{renderTag()}</div>
                 </div>
             )
-        }
-
-        // FRAME 3 — Ticket card with a connected button/tail carrying the headline. Like the SCAN-TO cards.
-        const W = 212
-        const panel = W - 28
-        const hsize = Math.min(headlineFontPx(headlineText, W * 0.84), 26)
-        return (
-            <div ref={wrapperRef} className="scanlogo-preview-wrapper actionlogo-frame actionlogo-ticket" style={frameWrapperStyle}>
-                <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        } else {
+            // Ticket card with a connected button/tail carrying the headline.
+            const W = 212
+            const panel = W - 28
+            const hsize = fitHeadlineFont(headlineText, W, 26, 13, 1)
+            graphic = (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <div style={{
                         width: W,
                         background: '#ffffff',
@@ -1019,14 +966,7 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                         {renderPlainQr(panel)}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{
-                            width: 0,
-                            height: 0,
-                            borderLeft: '9px solid transparent',
-                            borderRight: '9px solid transparent',
-                            borderBottom: `10px solid ${brandColor}`,
-                            marginTop: -1,
-                        }} />
+                        <div style={{ width: 0, height: 0, borderLeft: '9px solid transparent', borderRight: '9px solid transparent', borderBottom: `10px solid ${brandColor}`, marginTop: -1 }} />
                         <div style={{
                             background: brandFill,
                             borderRadius: 14,
@@ -1041,17 +981,50 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                         }}>
                             {renderHeadline(headlineText, onBrand, hsize, 1)}
                             {subtitleText && (
-                                <span style={{
-                                    color: onBrandSoft,
-                                    fontSize: 9,
-                                    fontWeight: 800,
-                                    letterSpacing: '0.12em',
-                                    textTransform: 'uppercase',
-                                    textAlign: 'center',
-                                }}>{subtitleText}</span>
+                                <span style={{ color: onBrandSoft, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center' }}>{subtitleText}</span>
                             )}
                         </div>
                     </div>
+                </div>
+            )
+        }
+
+        return (
+            <div ref={wrapperRef} className={`scanlogo-preview-wrapper actionlogo-frame actionlogo-${actionFrame}`} style={frameWrapperStyle}>
+                <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    {graphic}
+                    {showShortUrl && shortUrlText && (
+                        <a
+                            href={shortUrlHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="actionlogo-shorturl"
+                            style={{
+                                marginTop: 12,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                letterSpacing: '0.01em',
+                                color: '#0f172a',
+                                textDecoration: 'none',
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                background: 'rgba(255,255,255,0.94)',
+                                padding: '5px 11px',
+                                borderRadius: 999,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                boxShadow: '0 4px 12px rgba(15,23,42,0.18)',
+                                border: '1px solid rgba(15,23,42,0.08)',
+                                maxWidth: 280,
+                            }}
+                        >
+                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke={brandColor} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                            </svg>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortUrlText}</span>
+                        </a>
+                    )}
                 </div>
             </div>
         )

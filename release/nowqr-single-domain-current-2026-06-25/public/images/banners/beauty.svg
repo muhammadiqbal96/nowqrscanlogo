@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 340" width="240" height="340">
+  <defs>
+    <linearGradient id="roseGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#db2777"/>
+      <stop offset="100%" stop-color="#4d05e8"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="50%" stop-color="#eab308"/>
+      <stop offset="100%" stop-color="#ca8a04"/>
+    </linearGradient>
+    <filter id="mirrorShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="240" height="340" rx="24" fill="url(#roseGrad)"/>
+
+  <!-- Sparkles in background -->
+  <path d="M 40,60 L 42,65 L 47,67 L 42,69 L 40,74 L 38,69 L 33,67 L 38,65 Z" fill="#ffffff" opacity="0.3"/>
+  <path d="M 200,80 L 201,83 L 204,84 L 201,85 L 200,88 L 199,85 L 196,84 L 199,83 Z" fill="#ffffff" opacity="0.3"/>
+  <path d="M 50,280 L 51,283 L 54,284 L 51,285 L 50,288 L 49,285 L 46,284 L 49,283 Z" fill="#ffffff" opacity="0.2"/>
+
+  <!-- Girl silhouette/outline (shoulders & neck) -->
+  <path d="M 60,340 C 60,290 85,270 120,270 C 155,270 180,290 180,340 Z" fill="#fbcfe8" opacity="0.15"/>
+  <path d="M 105,270 L 105,295 L 135,295 L 135,270 Z" fill="#fbcfe8" opacity="0.2"/>
+
+  <!-- Long hair framing the sides -->
+  <path d="M 50,110 C 20,180 30,280 60,340" fill="none" stroke="#fbcfe8" stroke-width="8" stroke-linecap="round" opacity="0.25"/>
+  <path d="M 190,110 C 220,180 210,280 180,340" fill="none" stroke="#fbcfe8" stroke-width="8" stroke-linecap="round" opacity="0.25"/>
+
+  <!-- Mirror Handle -->
+  <path d="M 120,250 L 120,310" stroke="url(#goldGrad)" stroke-width="12" stroke-linecap="round" filter="url(#mirrorShadow)"/>
+  <path d="M 120,250 L 120,310" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.4"/>
+
+  <!-- Mirror Frame -->
+  <circle cx="120" cy="170" r="80" fill="#ffffff" filter="url(#mirrorShadow)"/>
+  <circle cx="120" cy="170" r="76" fill="url(#goldGrad)"/>
+  <circle cx="120" cy="170" r="68" fill="#ffffff"/>
+
+  <!-- Two cute cartoon hands holding the mirror frame -->
+  <circle cx="43" cy="170" r="10" fill="#fbcfe8" opacity="0.9"/>
+  <circle cx="197" cy="170" r="10" fill="#fbcfe8" opacity="0.9"/>
+
+  <!-- Sparkles on Mirror gold rim -->
+  <path d="M 65,115 L 67,118 L 70,119 L 67,120 L 65,123 L 63,120 L 60,119 L 63,118 Z" fill="#ffffff"/>
+  <path d="M 175,225 L 177,228 L 180,229 L 177,230 L 175,233 L 173,230 L 170,229 L 173,228 Z" fill="#ffffff"/>
+</svg>
