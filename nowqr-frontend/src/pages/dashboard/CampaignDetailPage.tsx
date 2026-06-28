@@ -636,8 +636,10 @@ export default function CampaignDetailPage() {
                                                                     ctaText={logo?.cta_text || campaign.cta_button_text || 'SCAN'}
                                                                     safeScanBadge={false}
                                                                     centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
-                                                                    size={Math.max(24, Math.min(width, height) - 20)}
-                                                                    minimal
+                                                                    subtitle={logo?.subtitle || ''}
+                                                                    bannerTemplate={logo?.banner || 'arch'}
+                                                                    size={Math.min(width, height)}
+                                                                    fitToSize
                                                                 />
                                                             </div>
                                                         );
@@ -701,8 +703,10 @@ export default function CampaignDetailPage() {
                                             ctaText={scanLogos[0].cta_text || campaign.cta_button_text || 'SCAN'}
                                             safeScanBadge={false}
                                             centerLogoUrl={scanLogos[0].center_logo_path ? `/storage/${scanLogos[0].center_logo_path}` : null}
+                                            subtitle={scanLogos[0].subtitle || ''}
+                                            bannerTemplate={scanLogos[0].banner || 'arch'}
                                             size={120}
-                                            minimal
+                                            fitToSize
                                         />
                                     </div>
                                 ) : (
@@ -814,8 +818,10 @@ export default function CampaignDetailPage() {
                                             ctaText={sl.cta_text || 'SCAN'}
                                             safeScanBadge={false}
                                             centerLogoUrl={sl.center_logo_path ? `/storage/${sl.center_logo_path}` : null}
+                                            subtitle={sl.subtitle || ''}
+                                            bannerTemplate={sl.banner || 'arch'}
                                             size={40}
-                                            minimal
+                                            fitToSize
                                         />
                                     </div>
                                     <div className="min-w-0 flex-1">
@@ -960,8 +966,10 @@ export default function CampaignDetailPage() {
                                                                             ctaText={logo?.cta_text || campaign?.cta_button_text || 'SCAN'}
                                                                             safeScanBadge={false}
                                                                             centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
-                                                                            size={Math.min(el.width, el.height) - 10}
-                                                                            minimal
+                                                                            subtitle={logo?.subtitle || ''}
+                                                                            bannerTemplate={logo?.banner || 'arch'}
+                                                                            size={Math.min(el.width, el.height)}
+                                                                            fitToSize
                                                                         />
                                                                     </div>
                                                                 )
@@ -1071,7 +1079,10 @@ export default function CampaignDetailPage() {
                                                     wrapperColor={logo?.wrapper_color || logo?.color || primaryColor}
                                                     ctaText={logo?.cta_text || campaign.cta_button_text || 'SCAN'} safeScanBadge={false}
                                                     centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
-                                                    size={Math.min(el.width, el.height) - 20} minimal
+                                                    subtitle={logo?.subtitle || ''}
+                                                    bannerTemplate={logo?.banner || 'arch'}
+                                                    size={Math.min(el.width, el.height) - 20}
+                                                    fitToSize
                                                 />
                                             </div>
                                         );
@@ -1186,8 +1197,10 @@ export default function CampaignDetailPage() {
                                 ctaText={enlargedLogo.cta_text || campaign?.cta_button_text || 'SCAN'}
                                 safeScanBadge={false}
                                 centerLogoUrl={enlargedLogo.center_logo_path ? `/storage/${enlargedLogo.center_logo_path}` : null}
+                                subtitle={enlargedLogo.subtitle || ''}
+                                bannerTemplate={enlargedLogo.banner || 'arch'}
                                 size={220}
-                                minimal
+                                fitToSize
                             />
                         </div>
 

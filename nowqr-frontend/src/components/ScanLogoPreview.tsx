@@ -25,6 +25,7 @@ export interface ScanLogoPreviewProps {
     /** When true, hides CTA text, short URL and safe-scan badge (for flyer embed) */
     minimal?: boolean
     bannerTemplate?: string
+    fitToSize?: boolean
 }
 
 export interface ScanLogoPreviewRef {
@@ -647,6 +648,41 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
             )
         }
 
+        const renderShortUrl = (forceWhite = false, isTag = false) => {
+            if (!showShortUrl || !shortUrlText) return null
+            const textColor = forceWhite ? '#ffffff' : onBrand
+            const iconStroke = forceWhite ? '#ffffff' : onBrand
+            return (
+                <a
+                    href={shortUrlHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="actionlogo-shorturl"
+                    style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        letterSpacing: '0.01em',
+                        color: textColor,
+                        textDecoration: 'none',
+                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                        background: 'transparent',
+                        padding: '4px 8px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        maxWidth: '90%',
+                        marginTop: isTag ? 4 : 8,
+                    }}
+                >
+                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke={iconStroke} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                    </svg>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortUrlText}</span>
+                </a>
+            )
+        }
+
         const renderPlainQr = (panel: number, round = false) => {
             // For a round disc the square QR must stay inside the inscribed square (≤ diameter/√2).
             const inner = Math.round(panel * (round ? 0.66 : 0.84))
@@ -710,6 +746,7 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                         {subtitleText && (
                             <span style={{ color: onBrandSoft, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center' }}>{subtitleText}</span>
                         )}
+                        {renderShortUrl(false, true)}
                     </div>
                 </div>
             )
@@ -754,6 +791,7 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                         {renderSubtitle(onBrand, dividerColor, Math.max(9, Math.round(W * 0.05)))}
                     </div>
                     {renderPlainQr(panel)}
+                    {renderShortUrl()}
                 </div>
             )
         } else if (actionFrame === 'circle') {
@@ -792,7 +830,7 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                         {subtitleText && (
                             <span style={{
                                 position: 'absolute',
-                                bottom: Math.round(D * 0.085),
+                                bottom: showShortUrl && shortUrlText ? Math.round(D * 0.125) : Math.round(D * 0.085),
                                 left: '50%',
                                 transform: 'translateX(-50%)',
                                 color: onBrand,
@@ -803,6 +841,20 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                                 whiteSpace: 'nowrap',
                                 textShadow: brandIsLight ? 'none' : '0 1px 2px rgba(15,23,42,0.3)',
                             }}>{subtitleText}</span>
+                        )}
+                        {showShortUrl && shortUrlText && (
+                            <div style={{
+                                position: 'absolute',
+                                bottom: subtitleText ? Math.round(D * 0.04) : Math.round(D * 0.075),
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                zIndex: 10,
+                                display: 'flex',
+                                justifyContent: 'center',
+                                width: '100%',
+                            }}>
+                                {renderShortUrl()}
+                            </div>
                         )}
                     </div>
                 </div>
@@ -854,9 +906,12 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                         {renderHeadline(headlineText, onBrand, headFont, 1)}
                     </div>
                     <div style={{ padding: 14 }}>{renderPlainQr(panel)}</div>
-                    {subtitleText && (
-                        <div style={{ width: '100%', background: brandFill, padding: '8px 12px', boxSizing: 'border-box', textAlign: 'center' }}>
-                            <span style={{ color: onBrand, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{subtitleText}</span>
+                    {(subtitleText || (showShortUrl && shortUrlText)) && (
+                        <div style={{ width: '100%', background: brandFill, padding: '8px 12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                            {subtitleText && (
+                                <span style={{ color: onBrand, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center' }}>{subtitleText}</span>
+                            )}
+                            {renderShortUrl()}
                         </div>
                     )}
                 </div>
@@ -872,6 +927,7 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                         {subtitleText && (
                             <span style={{ color: onBrandSoft, fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', textAlign: 'center' }}>{subtitleText}</span>
                         )}
+                        {renderShortUrl()}
                     </div>
                     {renderPlainQr(qrPanel)}
                 </div>
@@ -899,11 +955,12 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                 }}>
                     <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', width: 46, height: 5, borderRadius: 999, background: '#374151' }} />
                     {renderPlainQr(panel)}
-                    <div style={{ textAlign: 'center' }}>
+                    <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         {renderHeadline(headlineText, '#ffffff', headFont, 1)}
                         {subtitleText && (
                             <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 4, display: 'block' }}>{subtitleText}</span>
                         )}
+                        {renderShortUrl(true)}
                     </div>
                     <div style={{ width: 54, height: 4, borderRadius: 999, background: '#ffffff', opacity: 0.85 }} />
                 </div>
@@ -983,6 +1040,7 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                             {subtitleText && (
                                 <span style={{ color: onBrandSoft, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center' }}>{subtitleText}</span>
                             )}
+                            {renderShortUrl()}
                         </div>
                     </div>
                 </div>
@@ -993,38 +1051,6 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
             <div ref={wrapperRef} className={`scanlogo-preview-wrapper actionlogo-frame actionlogo-${actionFrame}`} style={frameWrapperStyle}>
                 <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     {graphic}
-                    {showShortUrl && shortUrlText && (
-                        <a
-                            href={shortUrlHref}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="actionlogo-shorturl"
-                            style={{
-                                marginTop: 12,
-                                fontSize: 12,
-                                fontWeight: 700,
-                                letterSpacing: '0.01em',
-                                color: '#0f172a',
-                                textDecoration: 'none',
-                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                background: 'rgba(255,255,255,0.94)',
-                                padding: '5px 11px',
-                                borderRadius: 999,
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                boxShadow: '0 4px 12px rgba(15,23,42,0.18)',
-                                border: '1px solid rgba(15,23,42,0.08)',
-                                maxWidth: 280,
-                            }}
-                        >
-                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke={brandColor} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                            </svg>
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortUrlText}</span>
-                        </a>
-                    )}
                 </div>
             </div>
         )

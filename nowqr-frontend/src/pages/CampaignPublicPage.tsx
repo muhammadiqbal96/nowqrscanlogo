@@ -28,6 +28,8 @@ interface CampaignPage {
         safe_scan_badge: boolean
         center_logo_path: string | null
         destination_url: string
+        subtitle?: string
+        banner?: string
     }[]
 }
 
@@ -160,8 +162,11 @@ export default function CampaignPublicPage() {
                             ctaText={scanLogo.cta_text || campaign.cta_button_text || 'TAP TO SCAN'}
                             safeScanBadge={false}
                             centerLogoUrl={scanLogo.center_logo_path ? `/storage/${scanLogo.center_logo_path}` : null}
+                            subtitle={scanLogo.subtitle || ''}
+                            bannerTemplate={scanLogo.banner || 'arch'}
                             size={240}
                             minimal
+                            fitToSize
                         />
                     </button>
 
@@ -220,8 +225,11 @@ export default function CampaignPublicPage() {
                                         ctaText={scanLogoCta}
                                         safeScanBadge={false}
                                         centerLogoUrl={scanLogo.center_logo_path ? `/storage/${scanLogo.center_logo_path}` : null}
+                                        subtitle={scanLogo.subtitle || ''}
+                                        bannerTemplate={scanLogo.banner || 'arch'}
                                         size={expandedScanLogoSize}
                                         minimal
+                                        fitToSize
                                     />
                                 </a>
 

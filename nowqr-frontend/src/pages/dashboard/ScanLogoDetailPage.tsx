@@ -364,6 +364,7 @@ export default function ScanLogoDetailPage() {
                                 shortUrl={scanLogo.short_url}
                                 size={180}
                                 bannerTemplate={frame}
+                                fitToSize
                             />
                         </div>
 

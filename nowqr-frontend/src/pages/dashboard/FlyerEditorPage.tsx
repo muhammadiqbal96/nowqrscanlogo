@@ -1399,8 +1399,10 @@ export default function FlyerEditorPage() {
                             ctaText={logo?.cta_text || campaign?.cta_button_text || 'SCAN ME'}
                             safeScanBadge={false}
                             centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
+                            subtitle={logo?.subtitle || ''}
+                            bannerTemplate={logo?.banner || 'arch'}
                             size={Math.min(el.width, el.height)}
-                            minimal
+                            fitToSize
                         />
                         {/* Enlarge and View Link actions overlay */}
                         <div 
@@ -1765,8 +1767,10 @@ export default function FlyerEditorPage() {
                                     ctaText={enlargedLogo.cta_text || campaign?.cta_button_text || 'SCAN'}
                                     safeScanBadge={false}
                                     centerLogoUrl={enlargedLogo.center_logo_path ? `/storage/${enlargedLogo.center_logo_path}` : null}
+                                    subtitle={enlargedLogo.subtitle || ''}
+                                    bannerTemplate={enlargedLogo.banner || 'arch'}
                                     size={220}
-                                    minimal
+                                    fitToSize
                                 />
                             </div>
 
@@ -1926,8 +1930,10 @@ export default function FlyerEditorPage() {
                                 ctaText={enlargedLogo.cta_text || campaign?.cta_button_text || 'SCAN'}
                                 safeScanBadge={false}
                                 centerLogoUrl={enlargedLogo.center_logo_path ? `/storage/${enlargedLogo.center_logo_path}` : null}
+                                subtitle={enlargedLogo.subtitle || ''}
+                                bannerTemplate={enlargedLogo.banner || 'arch'}
                                 size={220}
-                                minimal
+                                fitToSize
                             />
                         </div>
 

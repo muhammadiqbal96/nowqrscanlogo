@@ -358,6 +358,7 @@ export default function ScanLogoBuilderPage() {
                                 shortUrl="nqr.ai/xxxxxx"
                                 size={180}
                                 bannerTemplate={frame}
+                                fitToSize
                             />
                         </div>
 
