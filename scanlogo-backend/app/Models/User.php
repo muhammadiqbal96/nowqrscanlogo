@@ -151,6 +151,8 @@ class User extends Authenticatable implements MustVerifyEmail
             'payment_id' => $paymentInfo['payment_id'] ?? null,
             'payment_amount' => $paymentInfo['amount'] ?? null,
             'payment_currency' => $paymentInfo['currency'] ?? 'USD',
+            'coupon_code' => $paymentInfo['coupon_code'] ?? null,
+            'discount_amount' => $paymentInfo['discount_amount'] ?? null,
         ]);
     }
 }

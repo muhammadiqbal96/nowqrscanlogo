@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
     LayoutDashboard, Users, FileText, Send,
-    LogOut, Menu, X, Sun, Moon, ArrowLeft, Shield
+    LogOut, Menu, X, Sun, Moon, ArrowLeft, Shield, Ticket
 } from 'lucide-react'
 import {
     DropdownMenu,
@@ -19,6 +19,7 @@ const adminNavItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
     { icon: Users, label: 'Users', path: '/admin/users' },
     { icon: FileText, label: 'Blog Posts', path: '/admin/blogs' },
+    { icon: Ticket, label: 'Coupons', path: '/admin/coupons' },
     { icon: Send, label: 'Auto-Posts', path: '/admin/autopost' },
 ]
 

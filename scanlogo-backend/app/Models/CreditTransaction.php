@@ -19,6 +19,8 @@ class CreditTransaction extends Model
         'payment_id',
         'payment_amount',
         'payment_currency',
+        'coupon_code',
+        'discount_amount',
         'reference_type',
         'reference_id',
     ];
@@ -29,6 +31,7 @@ class CreditTransaction extends Model
             'amount' => 'integer',
             'balance_after' => 'integer',
             'payment_amount' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
         ];
     }
 

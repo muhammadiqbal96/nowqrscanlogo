@@ -173,12 +173,14 @@ export const analyticsApi = {
 export const creditsApi = {
   balance: () => api.get('/credits/balance'),
   transactions: (page = 1) => api.get(`/credits/transactions?page=${page}`),
-  purchasePlan: (plan: string) =>
-    api.post('/credits/purchase-plan', { plan }),
-  topUp: (credits: number) =>
-    api.post('/credits/top-up', { credits }),
+  purchasePlan: (plan: string, couponCode?: string) =>
+    api.post('/credits/purchase-plan', { plan, coupon_code: couponCode }),
+  topUp: (credits: number, couponCode?: string) =>
+    api.post('/credits/top-up', { credits, coupon_code: couponCode }),
   verifySession: (sessionId: string) =>
     api.post('/credits/verify-session', { session_id: sessionId }),
+  validateCoupon: (code: string, amount: number) =>
+    api.post('/credits/validate-coupon', { code, amount }),
 };
 
 // ─── Profile API ─────────────────────────────────────────────────
@@ -287,6 +289,24 @@ export const autoPostApi = {
 export const adminApi = {
   // Dashboard
   stats: () => api.get('/admin/stats'),
+
+  // Coupons
+  coupons: {
+    list: (page = 1) => api.get(`/admin/coupons?page=${page}`),
+    create: (data: {
+      code: string;
+      discount_percentage: number;
+      expires_at: string | null;
+      is_active: boolean;
+    }) => api.post('/admin/coupons', data),
+    update: (id: number, data: {
+      code?: string;
+      discount_percentage?: number;
+      expires_at?: string | null;
+      is_active?: boolean;
+    }) => api.put(`/admin/coupons/${id}`, data),
+    delete: (id: number) => api.delete(`/admin/coupons/${id}`),
+  },
 
   // Users
   users: {

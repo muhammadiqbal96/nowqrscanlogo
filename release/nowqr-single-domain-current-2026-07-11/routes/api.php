@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AdminBlogController;
 use App\Http\Controllers\Admin\AdminAutoPostController;
+use App\Http\Controllers\Admin\AdminCouponController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -104,6 +105,7 @@ Route::middleware(['auth:sanctum', 'check.blocked'])->group(function () {
     Route::post('/credits/purchase-plan', [CreditController::class, 'purchasePlan']);
     Route::post('/credits/top-up', [CreditController::class, 'topUp']);
     Route::post('/credits/verify-session', [CreditController::class, 'verifySession']);
+    Route::post('/credits/validate-coupon', [CreditController::class, 'validateCoupon']);
 
     // ─── Connected Platforms ────────────────────────────────────
     Route::apiResource('platforms', ConnectedPlatformController::class)->parameters(['platforms' => 'platform']);
@@ -138,6 +140,9 @@ Route::middleware(['auth:sanctum', 'check.blocked'])->group(function () {
         Route::apiResource('blogs', AdminBlogController::class);
         Route::post('/blogs/{blog}/cover', [AdminBlogController::class, 'uploadCover']);
         Route::post('/blogs/upload-image', [AdminBlogController::class, 'uploadContentImage']);
+
+        // Coupon management
+        Route::apiResource('coupons', AdminCouponController::class);
 
         // Auto-Post management
         Route::get('/autopost/stats', [AdminAutoPostController::class, 'stats']);

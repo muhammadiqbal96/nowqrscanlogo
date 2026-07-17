@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CreditCard, Zap, Sparkles, QrCode, Link2, Image, Check, Loader2, ExternalLink } from 'lucide-react'
+import { CreditCard, Zap, Sparkles, QrCode, Link2, Image, Check, Loader2, ExternalLink, Ticket } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { creditsApi } from '@/lib/api'
 import toast from 'react-hot-toast'
@@ -39,6 +39,11 @@ export default function CreditsPage() {
     const [loading, setLoading] = useState(true)
     const [purchasing, setPurchasing] = useState<string | null>(null)
     const [verifying, setVerifying] = useState(false)
+
+    // Coupon Code States
+    const [couponInput, setCouponInput] = useState('')
+    const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercentage: number } | null>(null)
+    const [verifyingCoupon, setVerifyingCoupon] = useState(false)
 
     useEffect(() => {
         loadTransactions()
@@ -88,10 +93,35 @@ export default function CreditsPage() {
         }
     }
 
+    const handleApplyCoupon = async () => {
+        if (!couponInput.trim()) return
+        setVerifyingCoupon(true)
+        try {
+            // Validate using a dummy amount of 100 to get discount percentage
+            const res = await creditsApi.validateCoupon(couponInput.trim(), 100)
+            setAppliedCoupon({
+                code: res.data.code,
+                discountPercentage: res.data.discount_percentage,
+            })
+            toast.success(`Coupon "${res.data.code}" applied successfully!`)
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || 'Invalid coupon code')
+            setAppliedCoupon(null)
+        } finally {
+            setVerifyingCoupon(false)
+        }
+    }
+
+    const handleRemoveCoupon = () => {
+        setAppliedCoupon(null)
+        setCouponInput('')
+        toast.success('Coupon removed')
+    }
+
     const handlePurchase = async (plan: string) => {
         setPurchasing(plan)
         try {
-            const res = await creditsApi.purchasePlan(plan)
+            const res = await creditsApi.purchasePlan(plan, appliedCoupon?.code)
             // Redirect to PayPal approval page
             window.location.href = res.data.checkout_url
         } catch (err: any) {
@@ -103,7 +133,7 @@ export default function CreditsPage() {
     const handleTopUp = async () => {
         setPurchasing('topup')
         try {
-            const res = await creditsApi.topUp(100)
+            const res = await creditsApi.topUp(100, appliedCoupon?.code)
             // Redirect to PayPal approval page
             window.location.href = res.data.checkout_url
         } catch (err: any) {
@@ -152,10 +182,61 @@ export default function CreditsPage() {
                         disabled={purchasing === 'topup'}
                         className="px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 text-sm disabled:opacity-50"
                     >
-                        {purchasing === 'topup' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Top Up +100 ($10)'}
+                        {purchasing === 'topup' ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : appliedCoupon ? (
+                            <span className="flex items-center gap-1.5">
+                                Top Up +100 <span className="line-through opacity-60">$10</span> <span>${(10 * (1 - appliedCoupon.discountPercentage / 100)).toFixed(2)}</span>
+                            </span>
+                        ) : (
+                            'Top Up +100 ($10)'
+                        )}
                     </button>
                 )}
             </div>
+
+            {/* Promo Code Section */}
+            {!isAdmin && (
+                <div className="bg-card border border-border rounded-2xl p-6">
+                    <h3 className="font-semibold mb-2 flex items-center gap-2">
+                        <Ticket className="w-4.5 h-4.5 text-primary" /> Have a Coupon Code?
+                    </h3>
+                    <p className="text-sm text-muted-foreground mb-4">Enter your promo code below to apply a discount to any package.</p>
+                    <div className="flex gap-3 max-w-md">
+                        <input
+                            type="text"
+                            placeholder="ENTER CODE"
+                            value={couponInput}
+                            onChange={(e) => setCouponInput(e.target.value.toUpperCase().trim())}
+                            disabled={!!appliedCoupon || verifyingCoupon}
+                            className="flex-1 px-3 py-2 bg-muted border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-mono tracking-wider placeholder:font-sans placeholder:tracking-normal text-sm"
+                        />
+                        {appliedCoupon ? (
+                            <button
+                                onClick={handleRemoveCoupon}
+                                className="px-4 py-2 bg-destructive/10 text-destructive font-semibold rounded-xl hover:bg-destructive/20 transition-all text-sm"
+                            >
+                                Remove
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleApplyCoupon}
+                                disabled={!couponInput || verifyingCoupon}
+                                className="px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 transition-all text-sm inline-flex items-center gap-1.5"
+                            >
+                                {verifyingCoupon && <Loader2 className="w-4 h-4 animate-spin" />}
+                                Apply
+                            </button>
+                        )}
+                    </div>
+                    {appliedCoupon && (
+                        <div className="mt-3 text-sm text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5 animate-in fade-in duration-200">
+                            <Check className="w-4 h-4" />
+                            Coupon "{appliedCoupon.code}" applied! {appliedCoupon.discountPercentage}% discount will be applied at checkout.
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Credit Costs */}
             <div className="bg-card border border-border rounded-2xl p-6">
@@ -187,8 +268,19 @@ export default function CreditsPage() {
                                 )}
                                 <h4 className="text-lg font-bold mb-1">{plan.name}</h4>
                                 <div className="flex items-baseline gap-1 mb-4">
-                                    <span className="text-3xl font-bold">{plan.price}</span>
-                                    <span className="text-sm text-muted-foreground">one-time</span>
+                                    {appliedCoupon ? (
+                                        <>
+                                            <span className="text-3xl font-bold text-foreground">
+                                                ${(parseInt(plan.price.replace('$', '')) * (1 - appliedCoupon.discountPercentage / 100)).toFixed(2)}
+                                            </span>
+                                            <span className="text-lg text-muted-foreground line-through">
+                                                {plan.price}
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <span className="text-3xl font-bold">{plan.price}</span>
+                                    )}
+                                    <span className="text-sm text-muted-foreground ml-1">one-time</span>
                                 </div>
                                 <ul className="space-y-2 mb-6">
                                     {plan.features.map((f) => (

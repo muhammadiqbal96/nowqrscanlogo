@@ -36,6 +36,7 @@ import BlogDetailPage from '@/pages/BlogDetailPage'
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage'
 import AdminUsersPage from '@/pages/admin/AdminUsersPage'
 import AdminBlogsPage from '@/pages/admin/AdminBlogsPage'
+import AdminCouponsPage from '@/pages/admin/AdminCouponsPage'
 import AdminAutoPostPage from '@/pages/admin/AdminAutoPostPage'
 import AutoPostDashboardPage from '@/pages/dashboard/autopost/AutoPostDashboardPage'
 import PlatformsPage from '@/pages/dashboard/autopost/PlatformsPage'
@@ -127,6 +128,7 @@ function App() {
               <Route index element={<AdminDashboardPage />} />
               <Route path="users" element={<AdminUsersPage />} />
               <Route path="blogs" element={<AdminBlogsPage />} />
+              <Route path="coupons" element={<AdminCouponsPage />} />
               <Route path="autopost" element={<AdminAutoPostPage />} />
             </Route>
           </Route>

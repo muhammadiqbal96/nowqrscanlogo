@@ -10,6 +10,8 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use App\Models\Coupon;
+use Illuminate\Support\Carbon;
 
 class CreditController extends Controller
 {
@@ -41,12 +43,52 @@ class CreditController extends Controller
     }
 
     /**
+     * Validate a coupon code and calculate the discount.
+     */
+    public function validateCoupon(Request $request): JsonResponse
+    {
+        $request->validate([
+            'code' => ['required', 'string'],
+            'amount' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $code = strtoupper($request->input('code'));
+        $amount = (float) $request->input('amount');
+
+        $coupon = Coupon::where('code', $code)->first();
+
+        if (!$coupon) {
+            return response()->json(['message' => 'Coupon code not found.'], 404);
+        }
+
+        if (!$coupon->is_active) {
+            return response()->json(['message' => 'This coupon is no longer active.'], 422);
+        }
+
+        if ($coupon->expires_at && Carbon::parse($coupon->expires_at)->endOfDay()->isPast()) {
+            return response()->json(['message' => 'This coupon has expired.'], 422);
+        }
+
+        $discountAmount = round(($amount * $coupon->discount_percentage) / 100, 2);
+        $discountedPrice = max(0.00, $amount - $discountAmount);
+
+        return response()->json([
+            'valid' => true,
+            'code' => $coupon->code,
+            'discount_percentage' => $coupon->discount_percentage,
+            'discount_amount' => $discountAmount,
+            'discounted_price' => $discountedPrice,
+        ]);
+    }
+
+    /**
      * Create a PayPal order for a plan purchase.
      */
     public function purchasePlan(Request $request): JsonResponse
     {
         $request->validate([
             'plan' => ['required', 'in:creator,agency'],
+            'coupon_code' => ['nullable', 'string'],
         ]);
 
         $user = $request->user();
@@ -58,6 +100,29 @@ class CreditController extends Controller
         }
 
         $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+        $amountUsd = (float) $planDetails['price'];
+
+        $couponCode = null;
+        $discountAmount = 0.00;
+        if ($request->filled('coupon_code')) {
+            $code = strtoupper($request->input('coupon_code'));
+            $coupon = Coupon::where('code', $code)->first();
+            if ($coupon && $coupon->is_active && (!$coupon->expires_at || !Carbon::parse($coupon->expires_at)->endOfDay()->isPast())) {
+                $couponCode = $coupon->code;
+                $discountAmount = round(($amountUsd * $coupon->discount_percentage) / 100, 2);
+                $amountUsd = max(0.00, $amountUsd - $discountAmount);
+            }
+        }
+
+        if ($amountUsd <= 0.00) {
+            $uniqid = uniqid();
+            $sessionId = "free_promo|{$user->id}|plan_purchase|{$planDetails['credits']}|{$plan}|{$couponCode}|{$discountAmount}|{$uniqid}";
+            return response()->json([
+                'checkout_url' => "{$frontendUrl}/dashboard/credits?paypal_success=1&token={$sessionId}",
+                'session_id' => $sessionId,
+                'provider' => 'free',
+            ]);
+        }
 
         try {
             $order = $this->createPaypalOrder(
@@ -65,10 +130,12 @@ class CreditController extends Controller
                 type: 'plan_purchase',
                 credits: (int) $planDetails['credits'],
                 plan: (string) $plan,
-                amountUsd: (float) $planDetails['price'],
-                description: "{$planDetails['name']} ({$planDetails['credits']} credits)",
+                amountUsd: $amountUsd,
+                description: "{$planDetails['name']} ({$planDetails['credits']} credits)" . ($couponCode ? " - Promo Code: {$couponCode}" : ""),
                 returnUrl: "{$frontendUrl}/dashboard/credits?paypal_success=1",
                 cancelUrl: "{$frontendUrl}/dashboard/credits?cancelled=1",
+                couponCode: $couponCode,
+                discountAmount: $discountAmount,
             );
         } catch (\Throwable $e) {
             Log::error('PayPal order creation failed for plan purchase', ['error' => $e->getMessage()]);
@@ -89,6 +156,7 @@ class CreditController extends Controller
     {
         $request->validate([
             'credits' => ['required', 'integer', 'min:50', 'max:10000'],
+            'coupon_code' => ['nullable', 'string'],
         ]);
 
         $user = $request->user();
@@ -98,6 +166,28 @@ class CreditController extends Controller
         $amountUsd = round(($credits / 100) * 10, 2);
         $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
 
+        $couponCode = null;
+        $discountAmount = 0.00;
+        if ($request->filled('coupon_code')) {
+            $code = strtoupper($request->input('coupon_code'));
+            $coupon = Coupon::where('code', $code)->first();
+            if ($coupon && $coupon->is_active && (!$coupon->expires_at || !Carbon::parse($coupon->expires_at)->endOfDay()->isPast())) {
+                $couponCode = $coupon->code;
+                $discountAmount = round(($amountUsd * $coupon->discount_percentage) / 100, 2);
+                $amountUsd = max(0.00, $amountUsd - $discountAmount);
+            }
+        }
+
+        if ($amountUsd <= 0.00) {
+            $uniqid = uniqid();
+            $sessionId = "free_promo|{$user->id}|top_up|{$credits}|-|{$couponCode}|{$discountAmount}|{$uniqid}";
+            return response()->json([
+                'checkout_url' => "{$frontendUrl}/dashboard/credits?paypal_success=1&token={$sessionId}",
+                'session_id' => $sessionId,
+                'provider' => 'free',
+            ]);
+        }
+
         try {
             $order = $this->createPaypalOrder(
                 userId: (int) $user->id,
@@ -105,9 +195,11 @@ class CreditController extends Controller
                 credits: $credits,
                 plan: '-',
                 amountUsd: $amountUsd,
-                description: "NowQR Credit Top-Up ({$credits} credits)",
+                description: "NowQR Credit Top-Up ({$credits} credits)" . ($couponCode ? " - Promo Code: {$couponCode}" : ""),
                 returnUrl: "{$frontendUrl}/dashboard/credits?paypal_success=1",
                 cancelUrl: "{$frontendUrl}/dashboard/credits?cancelled=1",
+                couponCode: $couponCode,
+                discountAmount: $discountAmount,
             );
         } catch (\Throwable $e) {
             Log::error('PayPal order creation failed for top-up', ['error' => $e->getMessage()]);
@@ -148,27 +240,49 @@ class CreditController extends Controller
                 ]);
             }
 
-            $capture = $this->capturePaypalOrder($orderId);
+            if (str_starts_with($orderId, 'free_promo|')) {
+                [$freePrefix, $orderUserId, $type, $creditsRaw, $planRaw, $couponCode, $discountAmountRaw, $uniqid] = array_pad(explode('|', $orderId), 8, null);
+                if ((int) $orderUserId !== (int) $user->id) {
+                    return response()->json(['message' => 'Payment does not belong to this user'], 403);
+                }
 
-            $customId = $capture['purchase_units'][0]['custom_id'] ?? null;
-            if (!$customId) {
-                return response()->json(['message' => 'Unable to validate payment metadata'], 422);
+                $credits = (int) $creditsRaw;
+                $plan = ($planRaw && $planRaw !== '-') ? $planRaw : null;
+                if ($credits <= 0) {
+                    return response()->json(['message' => 'Invalid credit payload'], 422);
+                }
+
+                $captureAmount = 0.00;
+                $captureCurrency = 'USD';
+                $captureId = $orderId;
+                $couponCode = $couponCode ?: null;
+                $discountAmount = $discountAmountRaw ? (float) $discountAmountRaw : null;
+            } else {
+                $capture = $this->capturePaypalOrder($orderId);
+
+                $customId = $capture['purchase_units'][0]['custom_id'] ?? null;
+                if (!$customId) {
+                    return response()->json(['message' => 'Unable to validate payment metadata'], 422);
+                }
+
+                [$prefix, $orderUserId, $type, $creditsRaw, $planRaw, $couponCode, $discountAmountRaw] = array_pad(explode('|', $customId), 7, null);
+                if ($prefix !== 'nowqr' || (int) $orderUserId !== (int) $user->id) {
+                    return response()->json(['message' => 'Payment does not belong to this user'], 403);
+                }
+
+                $credits = (int) $creditsRaw;
+                $plan = ($planRaw && $planRaw !== '-') ? $planRaw : null;
+                if ($credits <= 0) {
+                    return response()->json(['message' => 'Invalid credit payload from payment provider'], 422);
+                }
+
+                $captureAmount = (float) (($capture['purchase_units'][0]['payments']['captures'][0]['amount']['value'] ?? 0));
+                $captureCurrency = strtoupper((string) ($capture['purchase_units'][0]['payments']['captures'][0]['amount']['currency_code'] ?? 'USD'));
+                $captureId = $capture['purchase_units'][0]['payments']['captures'][0]['id'] ?? $orderId;
+
+                $couponCode = $couponCode ?: null;
+                $discountAmount = $discountAmountRaw ? (float) $discountAmountRaw : null;
             }
-
-            [$prefix, $orderUserId, $type, $creditsRaw, $planRaw] = array_pad(explode('|', $customId), 5, null);
-            if ($prefix !== 'nowqr' || (int) $orderUserId !== (int) $user->id) {
-                return response()->json(['message' => 'Payment does not belong to this user'], 403);
-            }
-
-            $credits = (int) $creditsRaw;
-            $plan = ($planRaw && $planRaw !== '-') ? $planRaw : null;
-            if ($credits <= 0) {
-                return response()->json(['message' => 'Invalid credit payload from payment provider'], 422);
-            }
-
-            $captureAmount = (float) (($capture['purchase_units'][0]['payments']['captures'][0]['amount']['value'] ?? 0));
-            $captureCurrency = strtoupper((string) ($capture['purchase_units'][0]['payments']['captures'][0]['amount']['currency_code'] ?? 'USD'));
-            $captureId = $capture['purchase_units'][0]['payments']['captures'][0]['id'] ?? $orderId;
 
             if ($type === 'plan_purchase' && $plan) {
                 $user->update(['plan' => $plan]);
@@ -176,18 +290,20 @@ class CreditController extends Controller
                 $user->addCredits(
                     $credits,
                     'purchase',
-                    "Purchased {$planDetails['name']} plan",
+                    "Purchased {$planDetails['name']} plan" . ($couponCode ? " (Coupon: {$couponCode})" : ""),
                     [
                         'provider' => 'paypal',
                         'payment_id' => $orderId,
                         'amount' => $captureAmount,
                         'currency' => $captureCurrency,
+                        'coupon_code' => $couponCode,
+                        'discount_amount' => $discountAmount,
                     ]
                 );
 
                 $this->sendPurchaseReceipt(
                     $user,
-                    "{$planDetails['name']} plan",
+                    "{$planDetails['name']} plan" . ($couponCode ? " (Coupon: {$couponCode})" : ""),
                     $credits,
                     $captureAmount,
                     $captureCurrency,
@@ -197,18 +313,20 @@ class CreditController extends Controller
                 $user->addCredits(
                     $credits,
                     'purchase',
-                    "Credit top-up: {$credits} credits",
+                    "Credit top-up: {$credits} credits" . ($couponCode ? " (Coupon: {$couponCode})" : ""),
                     [
                         'provider' => 'paypal',
                         'payment_id' => $orderId,
                         'amount' => $captureAmount,
                         'currency' => $captureCurrency,
+                        'coupon_code' => $couponCode,
+                        'discount_amount' => $discountAmount,
                     ]
                 );
 
                 $this->sendPurchaseReceipt(
                     $user,
-                    'Credit top-up',
+                    'Credit top-up' . ($couponCode ? " (Coupon: {$couponCode})" : ""),
                     $credits,
                     $captureAmount,
                     $captureCurrency,
@@ -247,11 +365,21 @@ class CreditController extends Controller
         string $description,
         string $returnUrl,
         string $cancelUrl,
+        ?string $couponCode = null,
+        float $discountAmount = 0.00,
     ): array {
         $token = $this->getPaypalAccessToken();
         $baseUrl = $this->getPaypalBaseUrl();
 
-        $customId = implode('|', ['nowqr', $userId, $type, $credits, $plan ?: '-']);
+        $customId = implode('|', [
+            'nowqr',
+            $userId,
+            $type,
+            $credits,
+            $plan ?: '-',
+            $couponCode ?: '',
+            $discountAmount > 0 ? number_format($discountAmount, 2, '.', '') : '',
+        ]);
 
         $response = $this->paypalHttp()->withToken($token)
             ->acceptJson()
