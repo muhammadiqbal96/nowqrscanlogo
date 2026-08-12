@@ -807,7 +807,9 @@ export default function CampaignDetailPage() {
                             {scanLogos.map((sl: any) => (
                                 <Link key={sl.id} to={`/dashboard/scanlogos/${sl.id}`}
                                     className="flex items-center gap-3 p-2.5 rounded-xl border border-border hover:bg-muted/50 transition-colors">
-                                    <div className="w-10 h-10 shrink-0">
+                                    <div className="w-11 h-11 shrink-0 rounded-lg overflow-hidden bg-white flex items-center justify-center">
+                                        {/* Thumbnail: minimal QR only. The full banner frame renders at a
+                                            fixed ~232px and would overflow this row, so it is not used here. */}
                                         <ScanLogoPreview
                                             url={sl.destination_url || sl.short_url || campaign.public_url || 'https://nowqr.com'}
                                             shortUrl={sl.short_url}
@@ -818,9 +820,8 @@ export default function CampaignDetailPage() {
                                             ctaText={sl.cta_text || 'SCAN'}
                                             safeScanBadge={false}
                                             centerLogoUrl={sl.center_logo_path ? `/storage/${sl.center_logo_path}` : null}
-                                            subtitle={sl.subtitle || ''}
-                                            bannerTemplate={sl.banner || 'arch'}
-                                            size={40}
+                                            size={44}
+                                            minimal
                                             fitToSize
                                         />
                                     </div>

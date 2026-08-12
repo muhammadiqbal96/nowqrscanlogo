@@ -302,8 +302,23 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
 
         let isMounted = true
         fetch(centerLogoUrl)
-            .then(res => res.blob())
+            .then(res => {
+                // A missing/unproxied /storage path often resolves to the SPA's
+                // index.html with a 200, not a 404. Guard on both status and the
+                // actual content type so HTML never gets fed to the QR as a logo.
+                if (!res.ok) {
+                    throw new Error(`Center logo request failed: ${res.status}`)
+                }
+                const type = res.headers.get('content-type') || ''
+                if (!type.startsWith('image/')) {
+                    throw new Error(`Center logo is not an image (got ${type || 'unknown'})`)
+                }
+                return res.blob()
+            })
             .then(blob => {
+                if (!blob.type.startsWith('image/')) {
+                    throw new Error(`Center logo blob is not an image (got ${blob.type})`)
+                }
                 const reader = new FileReader()
                 reader.onloadend = () => {
                     if (isMounted) {
@@ -313,8 +328,11 @@ const ScanLogoPreview = forwardRef<ScanLogoPreviewRef, ScanLogoPreviewProps>(fun
                 reader.readAsDataURL(blob)
             })
             .catch(err => {
-                console.error("Failed to load center logo as base64", err)
-                if (isMounted) setBase64Logo(centerLogoUrl) // fallback
+                // Render a clean QR with no center logo rather than a broken-image
+                // icon. Never fall back to the raw URL — if it didn't load here it
+                // will only render broken inside the QR.
+                console.error('Failed to load center logo; rendering without it.', err)
+                if (isMounted) setBase64Logo(undefined)
             })
 
         return () => { isMounted = false }

@@ -15,11 +15,16 @@ use App\Http\Controllers\Api\AutoPostController;
 use App\Http\Controllers\Api\CreditController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ScanLogoController;
+use App\Http\Controllers\Api\StickerTemplateController;
+use App\Http\Controllers\Api\PrintArtworkController;
+use App\Http\Controllers\Api\PrintOrderController;
+use App\Http\Controllers\Api\PrintProductController;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AdminBlogController;
 use App\Http\Controllers\Admin\AdminAutoPostController;
 use App\Http\Controllers\Admin\AdminCouponController;
+use App\Http\Controllers\Admin\AdminPrintController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -55,6 +60,9 @@ Route::get('/pricing', function () {
 });
 
 // Public campaign page (hosted landing page)
+// Public print-on-demand catalog (bumper stickers and friends)
+Route::get('/print/products', [PrintProductController::class, 'index']);
+
 Route::get('/pages/{slug}', [CampaignController::class, 'publicPage']);
 
 // Public blog routes
@@ -122,9 +130,28 @@ Route::middleware(['auth:sanctum', 'check.blocked'])->group(function () {
     Route::post('/autopost/posts/{autoPost}/publish', [AutoPostController::class, 'publish']);
 
     // ─── Admin Routes ───────────────────────────────────────────────
+    // Print-on-demand (physical stickers via Printify)
+    Route::post('/print/templates/generate', [StickerTemplateController::class, 'generate']);
+    Route::post('/print/artwork', [PrintArtworkController::class, 'store']);
+    Route::get('/print/orders', [PrintOrderController::class, 'index']);
+    Route::post('/print/orders', [PrintOrderController::class, 'store']);
+    Route::get('/print/orders/{printOrder}', [PrintOrderController::class, 'show']);
+    Route::post('/print/orders/{printOrder}/verify', [PrintOrderController::class, 'verify']);
+
     Route::middleware('admin')->prefix('admin')->group(function () {
         // Dashboard
         Route::get('/stats', [AdminDashboardController::class, 'stats']);
+
+        // Print-on-demand management
+        Route::get('/print/stats', [AdminPrintController::class, 'stats']);
+        Route::get('/print/orders', [AdminPrintController::class, 'orders']);
+        Route::get('/print/orders/{printOrder}', [AdminPrintController::class, 'showOrder']);
+        Route::post('/print/orders/{printOrder}/retry', [AdminPrintController::class, 'retryOrder']);
+        Route::post('/print/orders/{printOrder}/send-to-production', [AdminPrintController::class, 'sendToProduction']);
+        Route::post('/print/orders/{printOrder}/sync', [AdminPrintController::class, 'syncOrder']);
+        Route::post('/print/orders/{printOrder}/resolve', [AdminPrintController::class, 'resolveOrder']);
+        Route::get('/print/products', [AdminPrintController::class, 'products']);
+        Route::put('/print/products/{printProduct}', [AdminPrintController::class, 'updateProduct']);
 
         // User management
         Route::get('/users', [AdminUserController::class, 'index']);

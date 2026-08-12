@@ -7,10 +7,10 @@ import {
     AlignLeft, AlignCenter, AlignRight, MousePointer, Lock, Unlock,
     X,
     RotateCcw, RotateCw, FlipHorizontal, FlipVertical,
-    Camera, PenTool, Grid3X3, Eye, ExternalLink,
+    Camera, PenTool, Grid3X3, Eye, ExternalLink, Truck,
 } from 'lucide-react'
 import { toPng, toJpeg } from 'html-to-image'
-import { campaignApi, scanLogoApi, aiApi } from '@/lib/api'
+import { campaignApi, scanLogoApi, aiApi, printApi } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import {
     Select,
@@ -53,16 +53,57 @@ interface FlyerElement {
     opacity?: number
     // qr — scanLogo reference
     scanLogoId?: number
+    // qr — render a plain scannable QR (no nested banner). Set by the sticker
+    // composer, which draws its own headline/CTA around the code.
+    plainQr?: boolean
 }
 
-type AspectRatio = '1:1' | '9:16' | '4:5' | '16:9'
+type AspectRatio =
+    | '1:1' | '9:16' | '4:5' | '16:9'
+    | 'sticker-11.5x3' | 'sticker-10x3' | 'sticker-5x3' | 'sticker-3x3'
 
-const CANVAS_SIZES: Record<AspectRatio, { w: number; h: number; label: string }> = {
+interface CanvasSize {
+    w: number
+    h: number
+    label: string
+    /** Print presets are sized in real 300 DPI pixels, so the canvas *is* the
+     *  print file — exporting at pixelRatio 1 already lands at press resolution. */
+    print?: { widthIn: number; heightIn: number; dpi: number; productKey: string }
+}
+
+const PRINT_DPI = 300
+
+function printPreset(widthIn: number, heightIn: number, label: string, productKey: string): CanvasSize {
+    return {
+        w: Math.round(widthIn * PRINT_DPI),
+        h: Math.round(heightIn * PRINT_DPI),
+        label,
+        print: { widthIn, heightIn, dpi: PRINT_DPI, productKey },
+    }
+}
+
+const CANVAS_SIZES: Record<AspectRatio, CanvasSize> = {
     '1:1': { w: 1080, h: 1080, label: 'Square Post' },
     '9:16': { w: 1080, h: 1920, label: 'Story / Reel' },
     '4:5': { w: 1080, h: 1350, label: 'Portrait Post' },
     '16:9': { w: 1920, h: 1080, label: 'Landscape' },
+    'sticker-11.5x3': printPreset(11.5, 3, 'Bumper Sticker 11.5" x 3"', 'bumper-sticker-11x3'),
+    'sticker-10x3': printPreset(10, 3, 'Bumper Sticker 10" x 3"', 'bumper-sticker-10x3'),
+    'sticker-5x3': printPreset(5, 3, 'Vinyl Sticker 5" x 3"', 'sticker-5x3'),
+    'sticker-3x3': printPreset(3, 3, 'Square Sticker 3" x 3"', 'sticker-square-3x3'),
 }
+
+const PRINT_PRESETS = (Object.keys(CANVAS_SIZES) as AspectRatio[])
+    .filter((key) => CANVAS_SIZES[key].print)
+
+const SCREEN_PRESETS = (Object.keys(CANVAS_SIZES) as AspectRatio[])
+    .filter((key) => !CANVAS_SIZES[key].print)
+
+/**
+ * Print bleed/safe margin in canvas px. Vinyl is trimmed by a blade with real
+ * tolerance, so anything closer than this to the edge can be cut off.
+ */
+const PRINT_SAFE_MARGIN_PX = Math.round(0.125 * PRINT_DPI)
 
 let nextId = 1
 function uid() { return `el_${nextId++}_${Date.now()}` }
@@ -107,6 +148,30 @@ function extractApiErrorMessage(error: any, fallback: string): string {
     return fallback
 }
 
+/**
+ * Dashed trim/safe-area guide for print canvases.
+ *
+ * Rendered as a sibling of the export node, never a child — anything inside
+ * canvasRef ends up printed on the actual sticker.
+ */
+function PrintSafeGuide({ canvasSize, scale }: { canvasSize: CanvasSize; scale: number }) {
+    if (!canvasSize.print) return null
+
+    const inset = PRINT_SAFE_MARGIN_PX * scale
+
+    return (
+        <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+            <div
+                className="absolute border border-dashed border-red-500/60"
+                style={{ top: inset, left: inset, right: inset, bottom: inset }}
+            />
+            <span className="absolute -top-5 left-0 text-[10px] font-medium text-red-500/80">
+                Keep text inside the dashed line — edges get trimmed
+            </span>
+        </div>
+    )
+}
+
 /* ─── Main Component ─────────────────────────────────────────── */
 export default function FlyerEditorPage() {
     const { id } = useParams()
@@ -115,6 +180,9 @@ export default function FlyerEditorPage() {
     const [searchParams] = useSearchParams()
     const isFlyerMode = searchParams.get('type') === 'flyer'
     const templateSessionToken = (location.state as { templateSessionToken?: string } | null)?.templateSessionToken
+    const stickerTemplate = (location.state as {
+        stickerTemplate?: { elements?: FlyerElement[]; bgColor?: string; aspectRatio?: string }
+    } | null)?.stickerTemplate
     const { user, refreshUser } = useAuth()
     const canvasRef = useRef<HTMLDivElement>(null)
     const canvasWrapRef = useRef<HTMLDivElement>(null)
@@ -123,6 +191,7 @@ export default function FlyerEditorPage() {
     const [scanLogos, setScanLogos] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [exportingFormat, setExportingFormat] = useState<'png' | 'jpg' | 'gif' | null>(null)
+    const [ordering, setOrdering] = useState(false)
     const exporting = exportingFormat !== null
 
     // Canvas state
@@ -201,7 +270,34 @@ export default function FlyerEditorPage() {
                     const sessionCanvas = isFlyerMode ? sessionStorage.getItem(sessionKey) : null
                     const shouldUseSessionCanvas = Boolean(isFlyerMode && templateSessionToken && sessionCanvas)
 
-                    if (shouldUseSessionCanvas && sessionCanvas) {
+                    if (stickerTemplate?.elements?.length) {
+                        // Arrived from the Sticker Studio with a generated design;
+                        // it wins over anything saved on the campaign.
+                        const stickerRatio = (stickerTemplate.aspectRatio as AspectRatio) || aspectRatio
+                        // The composer already places elements in the sticker's
+                        // 300-DPI pixel space. Sync prevCanvasSizeRef to that size
+                        // FIRST so the aspect-ratio-change effect sees no change and
+                        // does not rescale (which would scramble the layout).
+                        if (CANVAS_SIZES[stickerRatio]) {
+                            prevCanvasSizeRef.current = CANVAS_SIZES[stickerRatio]
+                        }
+                        setAspectRatio(stickerRatio)
+                        setElements(stickerTemplate.elements)
+                        if (stickerTemplate.bgColor) setBgColor(stickerTemplate.bgColor)
+                        setBgImage(null)
+                        setBgTemplate(null)
+
+                        // The composer tags each QR element with the chosen ScanLogo id.
+                        // Wire it into qrScanLogoMap so the canvas renders that logo's
+                        // QR instead of silently falling back to scanLogos[0].
+                        const stickerMap: Record<string, number> = {}
+                        stickerTemplate.elements.forEach((el) => {
+                            if (el.type === 'qr' && typeof el.scanLogoId === 'number') {
+                                stickerMap[el.id] = el.scanLogoId
+                            }
+                        })
+                        if (Object.keys(stickerMap).length) setQrScanLogoMap(stickerMap)
+                    } else if (shouldUseSessionCanvas && sessionCanvas) {
                         try {
                             const parsed = JSON.parse(sessionCanvas)
                             const parsedToken = typeof parsed?._templateSessionToken === 'string'
@@ -248,7 +344,7 @@ export default function FlyerEditorPage() {
         return () => {
             isActive = false
         }
-    }, [id, isFlyerMode, navigate, templateSessionToken])
+    }, [id, isFlyerMode, navigate, templateSessionToken, stickerTemplate])
 
     /* ─── Recalculate scale on resize ────────────────────────── */
     useEffect(() => {
@@ -333,35 +429,35 @@ export default function FlyerEditorPage() {
 
         // Business name
         els.push({
-            id: uid(), type: 'text', x: 80, y: 160, width: 500, height: 50,
+            id: uid(), type: 'text', x: 80, y: 160, width: 500, height: 60,
             rotation: 0, locked: false,
             content: camp.business_name || 'Your Business',
-            fontSize: 24, fontFamily: font, fontWeight: '700',
+            fontSize: 32, fontFamily: font, fontWeight: '700',
             textColor: color, textAlign: 'left', fontStyle: 'normal',
         })
 
         // Headline
         els.push({
-            id: uid(), type: 'text', x: 80, y: 320, width: 920, height: 220,
+            id: uid(), type: 'text', x: 80, y: 320, width: 920, height: 240,
             rotation: 0, locked: false,
             content: camp.headline || 'Your Headline Here',
-            fontSize: 76, fontFamily: font, fontWeight: '800',
+            fontSize: 88, fontFamily: font, fontWeight: '800',
             textColor: '#111111', textAlign: 'left', fontStyle: 'normal',
         })
 
         // Divider line
         els.push({
-            id: uid(), type: 'shape', x: 80, y: 570, width: 80, height: 4,
+            id: uid(), type: 'shape', x: 80, y: 580, width: 80, height: 4,
             rotation: 0, locked: true, bgColor: color, borderRadius: 2, opacity: 1,
         })
 
         // Sub-headline
         if (camp.sub_headline) {
             els.push({
-                id: uid(), type: 'text', x: 80, y: 610, width: 800, height: 80,
+                id: uid(), type: 'text', x: 80, y: 620, width: 800, height: 90,
                 rotation: 0, locked: false,
                 content: camp.sub_headline,
-                fontSize: 30, fontFamily: font, fontWeight: '500',
+                fontSize: 36, fontFamily: font, fontWeight: '500',
                 textColor: '#111111', textAlign: 'left', fontStyle: 'normal',
             })
         }
@@ -369,10 +465,10 @@ export default function FlyerEditorPage() {
         // Description
         if (camp.description) {
             els.push({
-                id: uid(), type: 'text', x: 80, y: 730, width: 800, height: 180,
+                id: uid(), type: 'text', x: 80, y: 740, width: 800, height: 190,
                 rotation: 0, locked: false,
                 content: camp.description,
-                fontSize: 24, fontFamily: font, fontWeight: '400',
+                fontSize: 28, fontFamily: font, fontWeight: '400',
                 textColor: '#374151', textAlign: 'left', fontStyle: 'normal',
             })
         }
@@ -393,7 +489,7 @@ export default function FlyerEditorPage() {
                 id: uid(), type: 'text', x: 80, y: 1500, width: 340, height: 70,
                 rotation: 0, locked: false,
                 content: camp.cta_button_text,
-                fontSize: 24, fontFamily: font, fontWeight: '700',
+                fontSize: 28, fontFamily: font, fontWeight: '700',
                 textColor: '#ffffff', textAlign: 'center', fontStyle: 'normal',
             })
         }
@@ -409,7 +505,7 @@ export default function FlyerEditorPage() {
             id: uid(), type: 'text', x: 340, y: 1840, width: 400, height: 40,
             rotation: 0, locked: false,
             content: 'Powered by NowQR',
-            fontSize: 16, fontFamily: font, fontWeight: '400',
+            fontSize: 20, fontFamily: font, fontWeight: '400',
             textColor: 'rgba(17,17,17,0.7)', textAlign: 'center', fontStyle: 'normal',
         })
 
@@ -755,7 +851,9 @@ export default function FlyerEditorPage() {
                     width: `${canvasSize.w}px`,
                     height: `${canvasSize.h}px`,
                 },
-                pixelRatio: 2,
+                // Print presets are already measured in 300 DPI pixels, so 1x is
+                // exactly press resolution — doubling it only bloats the file.
+                pixelRatio: canvasSize.print ? 1 : 2,
                 quality: 0.95,
                 cacheBust: true,
             })
@@ -776,6 +874,62 @@ export default function FlyerEditorPage() {
             toast.error('Export failed. Try again.')
         } finally {
             setExportingFormat(null)
+        }
+    }
+
+    /* ─── Order physical stickers ────────────────────────────── */
+    const orderStickers = async () => {
+        if (!canvasRef.current || !canvasSize.print) return
+
+        setOrdering(true)
+        setSelectedId(null)
+        await new Promise(r => setTimeout(r, 100))
+
+        try {
+            const dataUrl = await toPng(canvasRef.current, {
+                width: canvasSize.w,
+                height: canvasSize.h,
+                style: {
+                    transform: 'none',
+                    width: `${canvasSize.w}px`,
+                    height: `${canvasSize.h}px`,
+                },
+                pixelRatio: 1,
+                cacheBust: true,
+            })
+
+            const products = await printApi.products()
+            const product = toArray<any>(products.data.products)
+                .find((p: any) => p.key === canvasSize.print!.productKey)
+
+            if (!product) {
+                toast.error('That sticker size is not on sale right now.')
+                return
+            }
+
+            const { data } = await printApi.uploadArtwork({
+                print_product_id: product.id,
+                image: dataUrl,
+                // Note: the :id route param is the CAMPAIGN id, not a campaign_flyers
+                // row — a sticker isn't a saved flyer, so we don't link one here.
+                // (Passing the campaign id triggered "campaign flyer id is invalid".)
+                design_snapshot: { elements, bgColor, bgImage, bgTemplate, aspectRatio, qrScanLogoMap },
+            })
+
+            navigate('/dashboard/stickers/checkout', {
+                state: {
+                    artworkId: data.artwork.id,
+                    productId: product.id,
+                    // Use the freshly-rendered PNG for the preview so it always
+                    // shows, independent of how /storage is served on the frontend.
+                    artworkUrl: dataUrl,
+                },
+            })
+        } catch (err: any) {
+            console.error(err)
+            toast.error(extractApiErrorMessage(err, 'Could not prepare your sticker for print.'))
+        } finally {
+            setOrdering(false)
         }
     }
 
@@ -866,7 +1020,7 @@ export default function FlyerEditorPage() {
             setEditingTextId(el.id)
         } else if (el.type === 'qr') {
             const logo = getQrScanLogo(el.id)
-            const url = logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://scanlogos.com'
+            const url = logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://nowqr.com'
             window.open(url, '_blank')
         }
     }
@@ -1390,7 +1544,7 @@ export default function FlyerEditorPage() {
                 return (
                     <div className="w-full h-full flex items-center justify-center relative group/qr">
                         <ScanLogoPreview
-                            url={logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                            url={logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://nowqr.com'}
                             shortUrl={logo?.short_url}
                             shape={logo?.shape || 'shield'}
                             animation={logo?.animation || 'none'}
@@ -1399,8 +1553,13 @@ export default function FlyerEditorPage() {
                             ctaText={logo?.cta_text || campaign?.cta_button_text || 'SCAN ME'}
                             safeScanBadge={false}
                             centerLogoUrl={logo?.center_logo_path ? `/storage/${logo.center_logo_path}` : null}
+                            subtitle={logo?.subtitle || ''}
+                            // Sticker templates place their own headline/CTA, so the QR
+                            // element must be a plain code, not a second nested banner.
+                            minimal={!!el.plainQr}
+                            bannerTemplate={el.plainQr ? 'none' : (logo?.banner || 'arch')}
                             size={Math.min(el.width, el.height)}
-                            minimal
+                            fitToSize
                         />
                         {/* Enlarge and View Link actions overlay */}
                         <div 
@@ -1425,7 +1584,7 @@ export default function FlyerEditorPage() {
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    const url = logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://scanlogos.com';
+                                    const url = logo?.destination_url || logo?.short_url || campaign?.public_url || 'https://nowqr.com';
                                     window.open(url, '_blank');
                                 }}
                                 className="p-2 rounded-full bg-white text-black hover:bg-slate-100 transition-colors shadow-lg pointer-events-auto"
@@ -1520,10 +1679,15 @@ export default function FlyerEditorPage() {
                 ↪ Redo
             </button>
             <Select value={aspectRatio} onValueChange={v => setAspectRatio(v as AspectRatio)}>
-                <SelectTrigger className="text-xs h-8 w-36"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="text-xs h-8 w-44"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                    {Object.entries(CANVAS_SIZES).map(([key, val]) => (
-                        <SelectItem key={key} value={key}>{val.label} ({key})</SelectItem>
+                    <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">Screen</div>
+                    {SCREEN_PRESETS.map(key => (
+                        <SelectItem key={key} value={key}>{CANVAS_SIZES[key].label} ({key})</SelectItem>
+                    ))}
+                    <div className="px-2 py-1 mt-1 text-[10px] font-semibold uppercase text-muted-foreground">Print · 300 DPI</div>
+                    {PRINT_PRESETS.map(key => (
+                        <SelectItem key={key} value={key}>{CANVAS_SIZES[key].label}</SelectItem>
                     ))}
                 </SelectContent>
             </Select>
@@ -1544,6 +1708,13 @@ export default function FlyerEditorPage() {
                     {fmt}
                 </button>
             ))}
+            {canvasSize.print && (
+                <button onClick={orderStickers} disabled={ordering || exporting || saving}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
+                    {ordering ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
+                    Order Prints
+                </button>
+            )}
         </div>
     )
 
@@ -1700,7 +1871,7 @@ export default function FlyerEditorPage() {
                         style={{ WebkitOverflowScrolling: 'touch' }}
                         onClick={() => { setSelectedId(null); setEditingTextId(null) }}
                     >
-                        <div style={{ width: canvasSize.w * canvasScale, height: canvasSize.h * canvasScale, flexShrink: 0 }}>
+                        <div className="relative" style={{ width: canvasSize.w * canvasScale, height: canvasSize.h * canvasScale, flexShrink: 0 }}>
                             <div
                                 ref={canvasRef}
                                 className="relative overflow-hidden shadow-2xl"
@@ -1715,6 +1886,7 @@ export default function FlyerEditorPage() {
                             >
                                 {renderCanvasElements()}
                             </div>
+                            <PrintSafeGuide canvasSize={canvasSize} scale={canvasScale} />
                         </div>
                     </div>
 
@@ -1750,13 +1922,13 @@ export default function FlyerEditorPage() {
                             <div 
                                 className="bg-white p-5 rounded-[2rem] shadow-inner mb-6 border border-slate-100 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform duration-200 select-none"
                                 onDoubleClick={() => {
-                                    const url = enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com';
+                                    const url = enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://nowqr.com';
                                     window.open(url, '_blank');
                                 }}
                                 title="Double click to visit link"
                             >
                                 <ScanLogoPreview
-                                    url={enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                                    url={enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://nowqr.com'}
                                     shortUrl={enlargedLogo.short_url}
                                     shape={enlargedLogo.shape || 'shield'}
                                     animation={enlargedLogo.animation || 'none'}
@@ -1765,14 +1937,16 @@ export default function FlyerEditorPage() {
                                     ctaText={enlargedLogo.cta_text || campaign?.cta_button_text || 'SCAN'}
                                     safeScanBadge={false}
                                     centerLogoUrl={enlargedLogo.center_logo_path ? `/storage/${enlargedLogo.center_logo_path}` : null}
+                                    subtitle={enlargedLogo.subtitle || ''}
+                                    bannerTemplate={enlargedLogo.banner || 'arch'}
                                     size={220}
-                                    minimal
+                                    fitToSize
                                 />
                             </div>
 
                             {/* Visit link button */}
                             <a
-                                href={enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                                href={enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://nowqr.com'}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl bg-primary text-primary-foreground font-bold py-2.5 text-xs hover:opacity-90 shadow-lg shadow-primary/20 transition-all"
@@ -1782,7 +1956,7 @@ export default function FlyerEditorPage() {
                             </a>
                             
                             <span className="text-[10px] text-muted-foreground mt-3 break-all max-w-full truncate px-4">
-                                {enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                                {enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://nowqr.com'}
                             </span>
                         </div>
                     </div>
@@ -1826,7 +2000,7 @@ export default function FlyerEditorPage() {
                 style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }}
                 onClick={() => { setSelectedId(null); setEditingTextId(null) }}
             >
-                <div style={{ width: canvasSize.w * canvasScale, height: canvasSize.h * canvasScale, flexShrink: 0, margin: '0 auto' }}>
+                <div className="relative" style={{ width: canvasSize.w * canvasScale, height: canvasSize.h * canvasScale, flexShrink: 0, margin: '0 auto' }}>
                     <div
                         ref={canvasRef}
                         className="relative overflow-hidden shadow-xl"
@@ -1841,6 +2015,7 @@ export default function FlyerEditorPage() {
                     >
                         {renderCanvasElements()}
                     </div>
+                    <PrintSafeGuide canvasSize={canvasSize} scale={canvasScale} />
                 </div>
             </div>
 
@@ -1911,13 +2086,13 @@ export default function FlyerEditorPage() {
                         <div 
                             className="bg-white p-5 rounded-[2rem] shadow-inner mb-6 border border-slate-100 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform duration-200 select-none"
                             onDoubleClick={() => {
-                                const url = enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com';
+                                const url = enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://nowqr.com';
                                 window.open(url, '_blank');
                             }}
                             title="Double click to visit link"
                         >
                             <ScanLogoPreview
-                                url={enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                                url={enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://nowqr.com'}
                                 shortUrl={enlargedLogo.short_url}
                                 shape={enlargedLogo.shape || 'shield'}
                                 animation={enlargedLogo.animation || 'none'}
@@ -1926,14 +2101,16 @@ export default function FlyerEditorPage() {
                                 ctaText={enlargedLogo.cta_text || campaign?.cta_button_text || 'SCAN'}
                                 safeScanBadge={false}
                                 centerLogoUrl={enlargedLogo.center_logo_path ? `/storage/${enlargedLogo.center_logo_path}` : null}
+                                subtitle={enlargedLogo.subtitle || ''}
+                                bannerTemplate={enlargedLogo.banner || 'arch'}
                                 size={220}
-                                minimal
+                                fitToSize
                             />
                         </div>
 
                         {/* Visit link button */}
                         <a
-                            href={enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                            href={enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://nowqr.com'}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl bg-primary text-primary-foreground font-bold py-2.5 text-xs hover:opacity-90 shadow-lg shadow-primary/20 transition-all"
@@ -1943,7 +2120,7 @@ export default function FlyerEditorPage() {
                         </a>
                         
                         <span className="text-[10px] text-muted-foreground mt-3 break-all max-w-full truncate px-4">
-                            {enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://scanlogos.com'}
+                            {enlargedLogo.destination_url || enlargedLogo.short_url || campaign?.public_url || 'https://nowqr.com'}
                         </span>
                     </div>
                 </div>

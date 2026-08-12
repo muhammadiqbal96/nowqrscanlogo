@@ -1,57 +1,62 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import {
-    ArrowLeft, ArrowRight, Loader2, Shield, Circle, Settings, Eye,
-    Diamond, Hexagon, Square, Upload, X, Disc3, Monitor,
-    ShoppingBag, Phone, Heart, Calendar, PlayCircle, UtensilsCrossed, Zap
-} from 'lucide-react'
+import { ArrowLeft, ArrowRight, Loader2, Upload, X } from 'lucide-react'
 import { scanLogoApi } from '@/lib/api'
 import ScanLogoPreview from '@/components/ScanLogoPreview'
 import { useAuth } from '@/context/AuthContext'
 import toast from 'react-hot-toast'
 
-const SHAPE_ICONS: Record<string, any> = {
-    shield: Shield, circle: Circle, gear: Settings,
-    eye: Eye, diamond: Diamond, hexagon: Hexagon, square: Square, drum: Disc3,
-    tv: Monitor,
+// One branded family — the only thing that changes between actions is the text + color.
+type Frame = 'arch' | 'circle' | 'ticket' | 'diamond' | 'pin' | 'vertical' | 'wide' | 'phone' | 'triangle' | 'brackets'
+
+type ActionPreset = {
+    value: string
+    label: string
+    headline: string
+    subtitle: string
+    wrapperColor: string
+    frame: Frame
+    placeholder: string
 }
 
-const SHAPE_LABELS: Record<string, string> = {
-    shield: 'Shield',
-    circle: 'Badge',
-    gear: 'Gear',
-    eye: 'Eye',
-    diamond: 'Diamond',
-    hexagon: 'Hex',
-    square: 'Square',
-    drum: 'Drum',
-    tv: 'TV',
-}
+const ACTION_PRESETS: ActionPreset[] = [
+    { value: 'scan_win', label: 'Scan & Win', headline: 'SCAN & WIN', subtitle: 'Win big today', wrapperColor: '#2563eb', frame: 'arch', placeholder: 'https://your-site.com/win' },
+    { value: 'take_a_bite', label: 'Take a Bite', headline: 'TAKE A BITE', subtitle: 'View the menu', wrapperColor: '#ea580c', frame: 'circle', placeholder: 'https://your-menu.com' },
+    { value: 'taste_magic', label: 'Taste Magic', headline: 'TASTE MAGIC', subtitle: 'Order now', wrapperColor: '#db2777', frame: 'arch', placeholder: 'https://your-store.com' },
+    { value: 'unlock_more', label: 'Unlock More', headline: 'UNLOCK MORE', subtitle: 'Get access', wrapperColor: '#7c3aed', frame: 'ticket', placeholder: 'https://your-site.com/unlock' },
+    { value: 'jump_in', label: 'Jump In', headline: 'JUMP IN', subtitle: 'Join the fun', wrapperColor: '#06b6d4', frame: 'circle', placeholder: 'https://your-site.com/join' },
+    { value: 'grab_the_deal', label: 'Grab the Deal', headline: 'GRAB THE DEAL', subtitle: 'Up to 35% off', wrapperColor: '#ef4444', frame: 'ticket', placeholder: 'https://your-store.com/deals' },
+    { value: 'fuel_up', label: 'Fuel Up', headline: 'FUEL UP', subtitle: 'Start training', wrapperColor: '#16a34a', frame: 'arch', placeholder: 'https://your-gym.com' },
+    { value: 'dive_in', label: 'Dive In', headline: 'DIVE IN', subtitle: 'Explore now', wrapperColor: '#0ea5e9', frame: 'circle', placeholder: 'https://your-site.com' },
+    { value: 'tap_to_discover', label: 'Tap to Discover', headline: 'TAP TO DISCOVER', subtitle: 'See more', wrapperColor: '#4f46e5', frame: 'ticket', placeholder: 'https://your-site.com/discover' },
+    { value: 'claim_your_spot', label: 'Claim Your Spot', headline: 'CLAIM YOUR SPOT', subtitle: 'Reserve now', wrapperColor: '#db2777', frame: 'arch', placeholder: 'https://your-site.com/reserve' },
+    { value: 'start_exploring', label: 'Start Exploring', headline: 'START EXPLORING', subtitle: 'Begin here', wrapperColor: '#059669', frame: 'circle', placeholder: 'https://your-site.com/explore' },
+    { value: 'catch_the_vibe', label: 'Catch the Vibe', headline: 'CATCH THE VIBE', subtitle: 'Tune in', wrapperColor: '#d97706', frame: 'ticket', placeholder: 'https://your-site.com' },
+    { value: 'find_your_fit', label: 'Find Your Fit', headline: 'FIND YOUR FIT', subtitle: 'Shop the look', wrapperColor: '#4f46e5', frame: 'arch', placeholder: 'https://your-store.com' },
+    { value: 'get_inspired', label: 'Get Inspired', headline: 'GET INSPIRED', subtitle: 'See the gallery', wrapperColor: '#ec4899', frame: 'circle', placeholder: 'https://your-site.com/gallery' },
+    { value: 'make_it_yours', label: 'Make It Yours', headline: 'MAKE IT YOURS', subtitle: 'Customize now', wrapperColor: '#1e293b', frame: 'ticket', placeholder: 'https://your-site.com/customize' },
+    { value: 'open_the_door', label: 'Open the Door', headline: 'OPEN THE DOOR', subtitle: 'Step inside', wrapperColor: '#15803d', frame: 'arch', placeholder: 'https://your-site.com' },
+    { value: 'reveal_more', label: 'Reveal More', headline: 'REVEAL MORE', subtitle: 'Tap to reveal', wrapperColor: '#dc2626', frame: 'circle', placeholder: 'https://your-site.com' },
+    { value: 'spark_your_journey', label: 'Spark Your Journey', headline: 'SPARK YOUR JOURNEY', subtitle: 'Get started', wrapperColor: '#8b5cf6', frame: 'ticket', placeholder: 'https://your-site.com/start' },
+    { value: 'price', label: 'Price / Offer', headline: '$34', subtitle: 'MENSUAL', wrapperColor: '#0284c7', frame: 'arch', placeholder: 'https://your-site.com/subscribe' },
+    { value: 'custom', label: 'Custom', headline: 'SCAN ME', subtitle: '', wrapperColor: '#0ea5e9', frame: 'arch', placeholder: 'https://your-site.com/action' },
+]
 
-const ANIMATION_OPTIONS = [
-    { value: 'spin', label: 'Ring Spin', desc: 'Revolving text around wrapper' },
-    { value: 'orbit', label: 'Dual Orbit', desc: 'Outer text ring moves forward, inner ring moves backward' },
-    { value: 'pulse', label: 'Bubble Pulse', desc: 'Soft bubbles and top text pulse' },
-    { value: 'expand', label: 'Pop Callout', desc: 'Text bubble expands above wrapper' },
-    { value: 'bounce', label: 'Bubble Bounce', desc: 'Bubble bursts around wrapper' },
-    { value: 'glow', label: 'Neon Glow', desc: 'Glowing wrapper rim (QR stays still)' },
-    { value: 'flash', label: 'Attention Burst', desc: 'Ribbon + callout flashing burst' },
-    { value: 'none', label: 'No Motion', desc: 'Static wrapper and static QR' },
+const FRAME_OPTIONS: { value: Frame; label: string; desc: string }[] = [
+    { value: 'arch', label: 'Arch Badge', desc: 'Headline on top, QR below ($34 style)' },
+    { value: 'circle', label: 'Circle + Ribbon', desc: 'Round badge with a ribbon banner' },
+    { value: 'ticket', label: 'Ticket + Button', desc: 'QR card with a connected action button' },
+    { value: 'diamond', label: 'Diamond', desc: 'Diamond badge with a tag below' },
+    { value: 'pin', label: 'Location Pin', desc: 'Map-pin teardrop with QR disc' },
+    { value: 'vertical', label: 'Vertical Card', desc: 'Header + QR + footer card' },
+    { value: 'wide', label: 'Wide Banner', desc: 'Text left, QR on the right' },
+    { value: 'phone', label: 'Phone Mockup', desc: 'QR on a phone screen' },
+    { value: 'triangle', label: 'Play Triangle', desc: 'Play-button badge with QR' },
+    { value: 'brackets', label: 'Bracket Frame', desc: 'Camera-style corner brackets' },
 ]
 
 const QR_COLOR_PRESETS = ['#111111', '#1f2937', '#0f766e', '#1d4ed8', '#9f1239', '#7c2d12', '#166534', '#ffffff']
-const WRAPPER_COLOR_PRESETS = ['#0ea5e9', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#0f172a', '#ffffff']
-
-const ACTION_PRESETS = [
-    { value: 'buy', label: 'Buy Now', desc: 'Products and offers', cta: 'BUY NOW', shape: 'square', animation: 'orbit', qrColor: '#111111', wrapperColor: '#2563eb', placeholder: 'https://your-store.com/products', icon: ShoppingBag },
-    { value: 'give', label: 'Give Now', desc: 'Donations and causes', cta: 'GIVE NOW', shape: 'circle', animation: 'pulse', qrColor: '#111111', wrapperColor: '#db2777', placeholder: 'https://your-nonprofit.org/donate', icon: Heart },
-    { value: 'pay', label: 'Pay Now', desc: 'Payments and invoices', cta: 'PAY NOW', shape: 'hexagon', animation: 'glow', qrColor: '#111111', wrapperColor: '#16a34a', placeholder: 'https://your-payment-link.com', icon: Zap },
-    { value: 'call', label: 'Call Now', desc: 'Phone-first actions', cta: 'CALL NOW', shape: 'circle', animation: 'flash', qrColor: '#111111', wrapperColor: '#ea580c', placeholder: 'tel:+15551234567', icon: Phone },
-    { value: 'book', label: 'Book Now', desc: 'Appointments and events', cta: 'BOOK NOW', shape: 'diamond', animation: 'expand', qrColor: '#111111', wrapperColor: '#7c3aed', placeholder: 'https://calendly.com/your-business', icon: Calendar },
-    { value: 'watch', label: 'Watch Now', desc: 'Video and media', cta: 'WATCH NOW', shape: 'tv', animation: 'bounce', qrColor: '#111111', wrapperColor: '#dc2626', placeholder: 'https://youtube.com/watch?v=...', icon: PlayCircle },
-    { value: 'order', label: 'Order Now', desc: 'Food and delivery', cta: 'ORDER NOW', shape: 'drum', animation: 'orbit', qrColor: '#111111', wrapperColor: '#f59e0b', placeholder: 'https://your-menu.com/order', icon: UtensilsCrossed },
-    { value: 'custom', label: 'Custom', desc: 'Any destination', cta: 'TAP TO SCAN', shape: 'shield', animation: 'orbit', qrColor: '#111111', wrapperColor: '#0ea5e9', placeholder: 'https://your-site.com/action', icon: Zap },
-]
+const WRAPPER_COLOR_PRESETS = ['#2563eb', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#db2777', '#0f172a']
 
 export default function ScanLogoBuilderPage() {
     const [searchParams] = useSearchParams()
@@ -60,13 +65,13 @@ export default function ScanLogoBuilderPage() {
     const campaignId = searchParams.get('campaign_id')
 
     const [loading, setLoading] = useState(false)
-    const [selectedAction, setSelectedAction] = useState('custom')
+    const [selectedAction, setSelectedAction] = useState('scan_win')
     const [destinationUrl, setDestinationUrl] = useState('')
-    const [shape, setShape] = useState('shield')
-    const [animation, setAnimation] = useState('orbit')
+    const [frame, setFrame] = useState<Frame>('arch')
     const [qrColor, setQrColor] = useState('#111111')
-    const [wrapperColor, setWrapperColor] = useState('#0ea5e9')
-    const [ctaText, setCtaText] = useState('TAP TO SCAN')
+    const [wrapperColor, setWrapperColor] = useState('#2563eb')
+    const [headline, setHeadline] = useState('SCAN & WIN')
+    const [subtitle, setSubtitle] = useState('Win big today')
     const [safeScanBadge, setSafeScanBadge] = useState(true)
 
     // Logo upload
@@ -91,13 +96,12 @@ export default function ScanLogoBuilderPage() {
 
     const selectedActionPreset = ACTION_PRESETS.find((preset) => preset.value === selectedAction) || ACTION_PRESETS[ACTION_PRESETS.length - 1]
 
-    const handleActionPreset = (preset: typeof ACTION_PRESETS[number]) => {
+    const handleActionPreset = (preset: ActionPreset) => {
         setSelectedAction(preset.value)
-        setCtaText(preset.cta)
-        setShape(SHAPE_ICONS[preset.shape] ? preset.shape : 'shield')
-        setAnimation(preset.animation)
-        setQrColor(preset.qrColor)
+        setHeadline(preset.headline)
+        setSubtitle(preset.subtitle)
         setWrapperColor(preset.wrapperColor)
+        setFrame(preset.frame)
     }
 
     const handleCreate = async () => {
@@ -109,12 +113,14 @@ export default function ScanLogoBuilderPage() {
             const res = await scanLogoApi.create({
                 campaign_id: campaignId ? Number(campaignId) : undefined,
                 destination_url: destinationUrl,
-                shape,
-                animation,
+                shape: 'square',
+                animation: 'none',
                 color: qrColor,
                 wrapper_color: wrapperColor,
-                cta_text: ctaText.trim() || 'TAP TO SCAN',
+                cta_text: headline.trim() || 'SCAN ME',
+                subtitle: subtitle.trim(),
                 safe_scan_badge: safeScanBadge,
+                banner: frame,
             })
 
             const newId = res.data.scan_logo.id
@@ -124,7 +130,7 @@ export default function ScanLogoBuilderPage() {
                 await scanLogoApi.uploadLogo(newId, logoFile).catch(() => { /* non-critical */ })
             }
 
-            toast.success('ScanLogo created!')
+            toast.success('Action ScanLogo created!')
             navigate(`/dashboard/scanlogos/${newId}`)
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Failed to create ScanLogo')
@@ -139,9 +145,9 @@ export default function ScanLogoBuilderPage() {
                 <ArrowLeft className="w-4 h-4" /> Back
             </button>
 
-            <h1 className="text-2xl lg:text-3xl font-bold mb-2">Build your ScanLogo</h1>
+            <h1 className="text-2xl lg:text-3xl font-bold mb-2">Build your Action ScanLogo</h1>
             <p className="text-muted-foreground mb-8 text-sm">
-                Build a branded QR wrapper: choose shape, color, and wrapper motion while the QR itself stays still for reliable scanning.
+                One branded look, three frames. Pick an action, set the headline + a short line for where it goes, choose your colors — the QR sits inside the wrapper with a transparent background, ready to drop anywhere.
             </p>
 
             <div className="grid lg:grid-cols-5 gap-8">
@@ -150,10 +156,9 @@ export default function ScanLogoBuilderPage() {
                     {/* Action Preset */}
                     <div className="bg-card border border-border rounded-2xl p-5">
                         <label className="block text-sm font-semibold mb-1.5">Action ScanLogo</label>
-                        <p className="text-xs text-muted-foreground mb-3">Choose the action before adding the destination URL.</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <p className="text-xs text-muted-foreground mb-3">Pick an action — it sets the headline, sub-line and color. You can fine-tune everything below.</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {ACTION_PRESETS.map((preset) => {
-                                const Icon = preset.icon
                                 const active = selectedAction === preset.value
                                 return (
                                     <button
@@ -162,13 +167,32 @@ export default function ScanLogoBuilderPage() {
                                         onClick={() => handleActionPreset(preset)}
                                         className={`text-left p-3 rounded-xl border-2 transition-all ${active ? 'border-primary bg-primary/5' : 'border-transparent bg-muted/50 hover:border-primary/30'}`}
                                     >
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${preset.wrapperColor}18`, color: preset.wrapperColor }}>
-                                                <Icon className="w-4 h-4" />
-                                            </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: preset.wrapperColor }} />
                                             <span className="text-xs font-semibold">{preset.label}</span>
                                         </div>
-                                        <p className="text-[10px] text-muted-foreground leading-snug">{preset.desc}</p>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Frame Selector */}
+                    <div className="bg-card border border-border rounded-2xl p-5">
+                        <label className="block text-sm font-semibold mb-1.5">Frame Style</label>
+                        <p className="text-xs text-muted-foreground mb-3">All three share the same brand look — only the silhouette changes.</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {FRAME_OPTIONS.map((opt) => {
+                                const active = frame === opt.value
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => setFrame(opt.value)}
+                                        className={`text-left p-3 rounded-xl border-2 transition-all ${active ? 'border-primary bg-primary/5' : 'border-transparent bg-muted/50 hover:border-primary/30'}`}
+                                    >
+                                        <span className="text-xs font-semibold block mb-0.5">{opt.label}</span>
+                                        <p className="text-[10px] text-muted-foreground leading-snug">{opt.desc}</p>
                                     </button>
                                 )
                             })}
@@ -177,8 +201,8 @@ export default function ScanLogoBuilderPage() {
 
                     {/* Destination URL */}
                     <div className="bg-card border border-border rounded-2xl p-5">
-                        <label className="block text-sm font-semibold mb-1.5">Destination URL for this action *</label>
-                        <p className="text-xs text-muted-foreground mb-3">Where should {selectedActionPreset.label.toLowerCase()} send people?</p>
+                        <label className="block text-sm font-semibold mb-1.5">Destination URL *</label>
+                        <p className="text-xs text-muted-foreground mb-3">Where should this action send people?</p>
                         <input
                             type="url"
                             placeholder={selectedActionPreset.placeholder}
@@ -187,6 +211,36 @@ export default function ScanLogoBuilderPage() {
                             className="w-full px-4 py-3 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
                         />
                         <p className="text-[11px] text-muted-foreground mt-2">The QR and tap target use this tracked destination after creation.</p>
+                    </div>
+
+                    {/* Headline + Subtitle */}
+                    <div className="bg-card border border-border rounded-2xl p-5">
+                        <label className="block text-sm font-semibold mb-1.5">Text Box</label>
+                        <p className="text-xs text-muted-foreground mb-3">The headline can be an action word (SCAN &amp; WIN) or a price ($34). The sub-line describes where it goes (MENSUAL, View the menu…).</p>
+                        <div className="space-y-3">
+                            <div>
+                                <p className="text-xs font-medium mb-1.5">Headline</p>
+                                <input
+                                    type="text"
+                                    placeholder="SCAN & WIN  or  $34"
+                                    value={headline}
+                                    maxLength={50}
+                                    onChange={(e) => setHeadline(e.target.value)}
+                                    className="w-full px-4 py-3 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
+                                />
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium mb-1.5">Sub-line (optional)</p>
+                                <input
+                                    type="text"
+                                    placeholder="Win big today  or  MENSUAL"
+                                    value={subtitle}
+                                    maxLength={60}
+                                    onChange={(e) => setSubtitle(e.target.value)}
+                                    className="w-full px-4 py-3 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     {/* Business Logo */}
@@ -212,49 +266,14 @@ export default function ScanLogoBuilderPage() {
                         )}
                     </div>
 
-                    {/* Shape */}
-                    <div className="bg-card border border-border rounded-2xl p-5">
-                        <label className="block text-sm font-semibold mb-3">Wrapper Shape</label>
-                        <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
-                            {Object.entries(SHAPE_ICONS).map(([key, Icon]) => (
-                                <button
-                                    key={key}
-                                    onClick={() => setShape(key)}
-                                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${shape === key ? 'border-primary bg-primary/5' : 'border-transparent bg-muted/50 hover:border-primary/30'}`}
-                                >
-                                    <Icon className="w-5 h-5" />
-                                    <span className="text-[10px] capitalize">{SHAPE_LABELS[key] || key}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Animation */}
-                    <div className="bg-card border border-border rounded-2xl p-5">
-                        <label className="block text-sm font-semibold mb-1">Wrapper Motion</label>
-                        <p className="text-[11px] text-muted-foreground mb-3">Motion applies only to the wrapper. QR code and shape stay static.</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            {ANIMATION_OPTIONS.map((opt) => (
-                                <button
-                                    key={opt.value}
-                                    onClick={() => setAnimation(opt.value)}
-                                    className={`text-left p-3 rounded-xl border-2 transition-all ${animation === opt.value ? 'border-primary bg-primary/5' : 'border-transparent bg-muted/50 hover:border-primary/30'}`}
-                                >
-                                    <p className="text-sm font-medium">{opt.label}</p>
-                                    <p className="text-[10px] text-muted-foreground">{opt.desc}</p>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
                     {/* Colors */}
                     <div className="bg-card border border-border rounded-2xl p-5">
                         <label className="block text-sm font-semibold mb-1">Color Controls</label>
-                        <p className="text-[11px] text-muted-foreground mb-4">Set QR and shape color separately from wrapper background color.</p>
+                        <p className="text-[11px] text-muted-foreground mb-4">Set the QR color separately from the wrapper brand color.</p>
 
                         <div className="space-y-4">
                             <div>
-                                <p className="text-xs font-medium mb-2">QR + Shape Color</p>
+                                <p className="text-xs font-medium mb-2">QR Color</p>
                                 <div className="flex items-center gap-2 flex-wrap">
                                     {QR_COLOR_PRESETS.map((c) => (
                                         <button
@@ -269,13 +288,13 @@ export default function ScanLogoBuilderPage() {
                                         value={qrColor}
                                         onChange={(e) => setQrColor(e.target.value)}
                                         className="w-9 h-9 rounded-lg cursor-pointer border border-border"
-                                        title="Pick QR and shape color"
+                                        title="Pick QR color"
                                     />
                                 </div>
                             </div>
 
                             <div>
-                                <p className="text-xs font-medium mb-2">Wrapper Background Color</p>
+                                <p className="text-xs font-medium mb-2">Wrapper Brand Color</p>
                                 <div className="flex items-center gap-2 flex-wrap">
                                     {WRAPPER_COLOR_PRESETS.map((c) => (
                                         <button
@@ -290,23 +309,11 @@ export default function ScanLogoBuilderPage() {
                                         value={wrapperColor}
                                         onChange={(e) => setWrapperColor(e.target.value)}
                                         className="w-9 h-9 rounded-lg cursor-pointer border border-border"
-                                        title="Pick wrapper background color"
+                                        title="Pick wrapper brand color"
                                     />
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    {/* CTA Text */}
-                    <div className="bg-card border border-border rounded-2xl p-5">
-                        <label className="block text-sm font-semibold mb-1.5">Wrapper Text</label>
-                        <input
-                            type="text"
-                            placeholder="TAP TO SCAN"
-                            value={ctaText}
-                            onChange={(e) => setCtaText(e.target.value)}
-                            className="w-full px-4 py-3 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
-                        />
                     </div>
 
                     {/* Safe Scan Badge */}
@@ -339,28 +346,29 @@ export default function ScanLogoBuilderPage() {
                 <div className="lg:col-span-2">
                     <div className="sticky top-4">
                         <p className="text-xs text-muted-foreground mb-3">Live Preview</p>
-                        <div className="bg-card border border-border rounded-2xl p-8">
-                            <ScanLogoPreview
-                                url={destinationUrl || 'https://scanlogos.com'}
-                                shape={shape}
-                                animation={animation}
+                        <div className="bg-card border border-border rounded-2xl p-8 flex items-center justify-center min-h-[360px]">
+                             <ScanLogoPreview
+                                url={destinationUrl || 'https://nowqr.com'}
                                 color={qrColor}
                                 wrapperColor={wrapperColor}
-                                ctaText={ctaText}
+                                ctaText={headline}
+                                subtitle={subtitle}
                                 safeScanBadge={safeScanBadge}
                                 centerLogoUrl={logoPreviewUrl}
                                 shortUrl="nqr.ai/xxxxxx"
                                 size={180}
+                                bannerTemplate={frame}
+                                fitToSize
                             />
+                        </div>
 
-                            {/* Download preview */}
-                            <div className="mt-6 w-full space-y-2 opacity-30">
-                                <p className="text-[10px] text-center text-muted-foreground">Available after creation:</p>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {['PNG', 'JPG', 'GIF'].map((fmt) => (
-                                        <div key={fmt} className="text-center py-2 bg-muted rounded-lg text-[10px] font-medium text-muted-foreground">{fmt}</div>
-                                    ))}
-                                </div>
+                        {/* Download preview */}
+                        <div className="mt-6 w-full space-y-2 opacity-30">
+                            <p className="text-[10px] text-center text-muted-foreground">Available after creation:</p>
+                            <div className="grid grid-cols-3 gap-2">
+                                {['PNG', 'JPG', 'GIF'].map((fmt) => (
+                                    <div key={fmt} className="text-center py-2 bg-muted rounded-lg text-[10px] font-medium text-muted-foreground">{fmt}</div>
+                                ))}
                             </div>
                         </div>
                     </div>

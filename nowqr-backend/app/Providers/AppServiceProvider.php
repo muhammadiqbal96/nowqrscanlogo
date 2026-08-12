@@ -2,9 +2,13 @@
 
 namespace App\Providers;
 
+use App\Services\Printify\LivePrintifyClient;
+use App\Services\Printify\PrintifyClient;
+use App\Services\Printify\StubPrintifyClient;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -14,7 +18,30 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(PrintifyClient::class, function () {
+            $config = config('services.printify');
+            $token = $config['api_token'] ?? null;
+            $shopId = $config['shop_id'] ?? null;
+
+            if (($config['mode'] ?? 'stub') !== 'live') {
+                return new StubPrintifyClient();
+            }
+
+            // Fall back rather than fail: a half-configured live mode should not
+            // take real orders it cannot fulfil.
+            if (!$token || !$shopId) {
+                Log::warning('Printify is in live mode but api_token/shop_id are missing; using the stub client.');
+
+                return new StubPrintifyClient();
+            }
+
+            return new LivePrintifyClient(
+                apiToken: (string) $token,
+                shopId: (string) $shopId,
+                baseUrl: rtrim((string) ($config['base_url'] ?? 'https://api.printify.com/v1'), '/'),
+                timeout: (int) ($config['timeout'] ?? 30),
+            );
+        });
     }
 
     /**

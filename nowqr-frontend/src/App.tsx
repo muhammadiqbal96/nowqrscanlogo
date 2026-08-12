@@ -28,6 +28,10 @@ import ScanLogoDetailPage from '@/pages/dashboard/ScanLogoDetailPage'
 import AnalyticsDashboardPage from '@/pages/dashboard/AnalyticsDashboardPage'
 import SettingsPage from '@/pages/dashboard/SettingsPage'
 import CreditsPage from '@/pages/dashboard/CreditsPage'
+import StickerStudioPage from '@/pages/dashboard/StickerStudioPage'
+import StickerCheckoutPage from '@/pages/dashboard/StickerCheckoutPage'
+import PrintOrdersPage from '@/pages/dashboard/PrintOrdersPage'
+import PrintOrderDetailPage from '@/pages/dashboard/PrintOrderDetailPage'
 import FlyerEditorPage from '@/pages/dashboard/FlyerEditorPage'
 import TemplateSelectionPage from '@/pages/dashboard/TemplateSelectionPage'
 import CampaignPublicPage from '@/pages/CampaignPublicPage'
@@ -111,6 +115,10 @@ function App() {
               <Route path="scanlogos" element={<ScanLogosListPage />} />
               <Route path="scanlogos/new" element={<ScanLogoBuilderPage />} />
               <Route path="scanlogos/:id" element={<ScanLogoDetailPage />} />
+              <Route path="stickers" element={<StickerStudioPage />} />
+              <Route path="stickers/checkout" element={<StickerCheckoutPage />} />
+              <Route path="orders" element={<PrintOrdersPage />} />
+              <Route path="orders/:id" element={<PrintOrderDetailPage />} />
               <Route path="analytics" element={<AnalyticsDashboardPage />} />
               <Route path="credits" element={<CreditsPage />} />
               <Route path="settings" element={<SettingsPage />} />

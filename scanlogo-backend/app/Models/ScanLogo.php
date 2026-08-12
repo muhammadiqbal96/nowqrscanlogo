@@ -21,6 +21,7 @@ class ScanLogo extends Model
         'color',
         'wrapper_color',
         'cta_text',
+        'subtitle',
         'center_logo_path',
         'safe_scan_badge',
         'png_path',
@@ -28,6 +29,7 @@ class ScanLogo extends Model
         'webp_path',
         'is_dynamic',
         'is_active',
+        'banner',
     ];
 
     protected function casts(): array

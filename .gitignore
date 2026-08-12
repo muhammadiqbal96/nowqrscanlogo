@@ -1,0 +1,6 @@
+# Environment files — never commit real secrets.
+# (Applies in every directory; .env.example is intentionally kept.)
+.env
+.env.*
+!.env.example
+!.env.*.example

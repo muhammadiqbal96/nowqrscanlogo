@@ -103,6 +103,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(AutoPost::class);
     }
 
+    public function printArtworks()
+    {
+        return $this->hasMany(PrintArtwork::class);
+    }
+
+    public function printOrders()
+    {
+        return $this->hasMany(PrintOrder::class);
+    }
+
     // Credit helpers
     public function hasCredits(int $amount): bool
     {

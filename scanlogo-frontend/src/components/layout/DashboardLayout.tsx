@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
-    LayoutDashboard, Megaphone, QrCode, BarChart3, Settings, CreditCard,
+    LayoutDashboard, Megaphone, QrCode, BarChart3, Settings, CreditCard, Sticker, Package,
     LogOut, Menu, X, Sun, Moon, Plus, Shield, Send
 } from 'lucide-react'
 import {
@@ -20,6 +20,8 @@ const navItems = [
     { icon: Megaphone, label: 'Campaigns', path: '/dashboard/campaigns' },
     { icon: QrCode, label: 'ScanLogos', path: '/dashboard/scanlogos' },
     { icon: Send, label: 'Auto-Post', path: '/dashboard/autopost' },
+    { icon: Sticker, label: 'Stickers', path: '/dashboard/stickers' },
+    { icon: Package, label: 'Orders', path: '/dashboard/orders' },
     { icon: BarChart3, label: 'Analytics', path: '/dashboard/analytics' },
     { icon: CreditCard, label: 'Credits', path: '/dashboard/credits' },
     { icon: Settings, label: 'Settings', path: '/dashboard/settings' },

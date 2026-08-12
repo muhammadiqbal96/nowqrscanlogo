@@ -119,7 +119,9 @@ export const scanLogoApi = {
     color?: string;
     wrapper_color?: string;
     cta_text?: string;
+    subtitle?: string;
     safe_scan_badge?: boolean;
+    banner?: string;
   }) => api.post('/scanlogos', data),
   update: (id: number, data: Record<string, unknown>) =>
     api.put(`/scanlogos/${id}`, data),
@@ -165,6 +167,66 @@ export const analyticsApi = {
   dashboard: () => api.get('/analytics/dashboard'),
   campaign: (id: number) => api.get(`/analytics/campaigns/${id}`),
   scanLogo: (id: number) => api.get(`/analytics/scanlogos/${id}`),
+};
+
+// ─── Print-on-Demand API ─────────────────────────────────────────
+export interface PrintProduct {
+  id: number;
+  key: string;
+  name: string;
+  description: string | null;
+  width_in: number;
+  height_in: number;
+  print_dpi: number;
+  print_width_px: number;
+  print_height_px: number;
+  retail_price: number;
+  retail_price_cents: number;
+  currency: string;
+  min_quantity: number;
+  max_quantity: number;
+  canvas_preset: string | null;
+  mockup_url: string | null;
+  size_label: string;
+}
+
+export interface ShippingAddress {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  region?: string;
+  country: string;
+  zip: string;
+}
+
+export const printApi = {
+  products: () => api.get('/print/products'),
+  generateTemplates: (data: {
+    product_key: string;
+    business_name: string;
+    business_description?: string;
+    tone?: string;
+    scan_logo_id?: number;
+    count?: number;
+  }) => api.post('/print/templates/generate', data),
+  uploadArtwork: (data: {
+    print_product_id: number;
+    image: string;
+    scan_logo_id?: number;
+    campaign_flyer_id?: number;
+    design_snapshot?: unknown;
+  }) => api.post('/print/artwork', data),
+  createOrder: (data: {
+    items: { print_product_id: number; print_artwork_id: number; quantity: number }[];
+    shipping: ShippingAddress;
+  }) => api.post('/print/orders', data),
+  orders: (page = 1) => api.get(`/print/orders?page=${page}`),
+  order: (id: number) => api.get(`/print/orders/${id}`),
+  verifyOrder: (id: number) => api.post(`/print/orders/${id}/verify`),
 };
 
 // ─── Credits API ─────────────────────────────────────────────────
@@ -287,6 +349,21 @@ export const autoPostApi = {
 export const adminApi = {
   // Dashboard
   stats: () => api.get('/admin/stats'),
+
+  // Print-on-demand
+  print: {
+    stats: () => api.get('/admin/print/stats'),
+    orders: (params?: { page?: number; status?: string; needs_attention?: boolean; search?: string }) =>
+      api.get('/admin/print/orders', { params }),
+    order: (id: number) => api.get(`/admin/print/orders/${id}`),
+    retry: (id: number) => api.post(`/admin/print/orders/${id}/retry`),
+    sendToProduction: (id: number) => api.post(`/admin/print/orders/${id}/send-to-production`),
+    sync: (id: number) => api.post(`/admin/print/orders/${id}/sync`),
+    resolve: (id: number) => api.post(`/admin/print/orders/${id}/resolve`),
+    products: () => api.get('/admin/print/products'),
+    updateProduct: (id: number, data: Record<string, unknown>) =>
+      api.put(`/admin/print/products/${id}`, data),
+  },
 
   // Coupons
   coupons: {

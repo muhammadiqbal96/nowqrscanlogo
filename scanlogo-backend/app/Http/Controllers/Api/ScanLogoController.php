@@ -38,7 +38,9 @@ class ScanLogoController extends Controller
             'color' => ['sometimes', 'string', 'max:20'],
             'wrapper_color' => ['sometimes', 'string', 'max:20'],
             'cta_text' => ['sometimes', 'string', 'max:50'],
+            'subtitle' => ['sometimes', 'nullable', 'string', 'max:60'],
             'safe_scan_badge' => ['sometimes', 'boolean'],
+            'banner' => ['sometimes', 'nullable', 'string', 'max:50'],
         ]);
 
         if (!array_key_exists('wrapper_color', $validated)) {
@@ -106,7 +108,9 @@ class ScanLogoController extends Controller
             'color' => ['sometimes', 'string', 'max:20'],
             'wrapper_color' => ['sometimes', 'string', 'max:20'],
             'cta_text' => ['sometimes', 'string', 'max:50'],
+            'subtitle' => ['sometimes', 'nullable', 'string', 'max:60'],
             'safe_scan_badge' => ['sometimes', 'boolean'],
+            'banner' => ['sometimes', 'nullable', 'string', 'max:50'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
