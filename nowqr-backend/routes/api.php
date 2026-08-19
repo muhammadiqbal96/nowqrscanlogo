@@ -131,6 +131,7 @@ Route::middleware(['auth:sanctum', 'check.blocked'])->group(function () {
 
     // Print-on-demand (physical stickers via Printify)
     Route::post('/print/templates/generate', [StickerTemplateController::class, 'generate']);
+    Route::post('/print/templates/compose', [StickerTemplateController::class, 'compose']);
     Route::post('/print/artwork', [PrintArtworkController::class, 'store']);
     Route::get('/print/orders', [PrintOrderController::class, 'index']);
     Route::post('/print/orders', [PrintOrderController::class, 'store']);

@@ -97,6 +97,71 @@ class StickerTemplateController extends Controller
     }
 
     /**
+     * Compose a single sticker design from explicit user input.
+     *
+     * Powers the live "customize it yourself" panel: the customer types any
+     * text, picks colours and a layout, and the composer auto-arranges it
+     * around the QR — no AI, deterministic and instant.
+     */
+    public function compose(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'product_key' => ['required', 'string', 'exists:print_products,key'],
+            'headline' => ['nullable', 'string', 'max:40'],
+            'subtitle' => ['nullable', 'string', 'max:60'],
+            'cta_text' => ['nullable', 'string', 'max:20'],
+            'layout' => ['nullable', 'string', 'in:' . implode(',', StickerTemplateComposer::LAYOUTS)],
+            'background' => ['nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'accent' => ['nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'text_color' => ['nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'font' => ['nullable', 'string', 'max:40'],
+            'scan_logo_id' => ['nullable', 'exists:scan_logos,id'],
+        ]);
+
+        $user = $request->user();
+
+        if (!empty($validated['scan_logo_id'])
+            && !$user->scanLogos()->whereKey($validated['scan_logo_id'])->exists()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $product = PrintProduct::where('key', $validated['product_key'])->firstOrFail();
+
+        $composed = $this->composer->compose(
+            brief: [
+                'headline' => $validated['headline'] ?? 'SCAN ME',
+                'subtitle' => $validated['subtitle'] ?? '',
+                'cta_text' => $validated['cta_text'] ?? '',
+                'layout' => $validated['layout'] ?? 'qr-left',
+                'font' => $validated['font'] ?? 'Inter',
+                'colors' => array_filter([
+                    'background' => $validated['background'] ?? null,
+                    'primary' => $validated['accent'] ?? null,
+                    'accent' => $validated['accent'] ?? null,
+                    'text' => $validated['text_color'] ?? null,
+                ]),
+            ],
+            canvasWidth: $product->print_width_px,
+            canvasHeight: $product->print_height_px,
+            dpi: $product->print_dpi,
+            aspectRatio: $product->canvas_preset ?? 'sticker-11.5x3',
+            scanLogoId: $validated['scan_logo_id'] ?? null,
+        );
+
+        return response()->json([
+            'product' => $product,
+            'template' => [
+                'canvas_state' => [
+                    'elements' => $composed['elements'],
+                    'bgColor' => $composed['bgColor'],
+                    'aspectRatio' => $composed['aspectRatio'],
+                ],
+                'warnings' => $composed['warnings'],
+            ],
+        ]);
+    }
+
+    /**
      * @return array<int, array>
      */
     private function generateBriefs(array $data, int $count, string $apiKey): array

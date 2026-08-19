@@ -213,6 +213,17 @@ export const printApi = {
     scan_logo_id?: number;
     count?: number;
   }) => api.post('/print/templates/generate', data),
+  composeTemplate: (data: {
+    product_key: string;
+    headline?: string;
+    subtitle?: string;
+    cta_text?: string;
+    layout?: string;
+    background?: string;
+    accent?: string;
+    text_color?: string;
+    scan_logo_id?: number;
+  }) => api.post('/print/templates/compose', data),
   uploadArtwork: (data: {
     print_product_id: number;
     image: string;
